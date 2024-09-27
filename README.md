@@ -8,13 +8,6 @@ Apply diffusion models to deconvolute highly multiplexed DIA-MS/MS data by condi
 
 # Diffusion Deconvolution of DIA-MS/MS Data
 
-**Keywords**: Deep Learning, Mass Spec, Signal Processing, Diffusion, DIA  
-**Looking for Teammates**: YES  
-**Expected Team Size**: 3-5  
-**Required Skills**: Python, R, Bash, HPC  
-**Computational Background**: 7  
-**Biological Background**: 5  
-
 As biological analysis machines and methodologies become more sophisticated and capable of handling more complex samples, the data they output also become more complicated to analyze. Modern generative machine learning techniques such as diffusion and score-based modeling have been used with great success in the domains of image, video, text, and audio data.
 
 We aim to apply the same principles to highly multiplexed biological data signals and leverage the ability of generative models to learn the underlying distribution of the data, instead of just the boundaries using discriminative methods. We hope to apply diffusion models to signal denoising, specifically the deconvolution of highly multiplexed DIA-MS/MS data.
