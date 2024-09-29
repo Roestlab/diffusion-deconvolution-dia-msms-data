@@ -2,7 +2,7 @@
 
 Apply diffusion models to deconvolute highly multiplexed DIA-MS/MS data by conditioning on MS1 signals to generate cleaner MS2 data for downstream analysis.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![](https://img.shields.io/badge/License-BSD--3--Clause-blue?style=for-the-badge)
 
 ## Abstract
 
@@ -20,52 +20,68 @@ We currently have access to a set of clean MS2 data which we plan to use to gene
 
 ## Installation
 
-Provide instructions on how to install and set up the project, such as installing dependencies and preparing the environment.
+### 1. Clone the Repository
+
+First, clone the repository to your local machine:
 
 ```bash
-# Example command to install dependencies (Python)
-pip install project-dependencies
+git clone git@github.com:hackbio-ca/diffusion-deconvolution-dia-msms.git
+cd diffusion-deconvolution-dia-msms
+```
 
-# Example command to install dependencies (R)
-install.packages("project-dependencies")
+### 2. Set Up the Environment
+It's recommended to use a virtual environment. You can create one using Python's built-in venv module:
+
+```bash
+virtualenv venv
+source venv/bin/activate  
+```
+### 3. Install the library
+```bash
+pip install .
 ```
 
 ## Quick Start
 
-Provide a basic usage example or minimal code snippet that demonstrates how to use the project.
+The library has a CLI for training the diffusion model.
 
-```python
-# Example usage (Python)
-import my_project
+```bash
+$ dquartic train --help
+Usage: dquartic train [OPTIONS]
 
-demo = my_project.example_function()
-print(demo)
-```
-```r
-# Example usage (R)
-library(my_project)
+  Train a DDIM model on the DIAMS dataset.
 
-demo <- example_function()
-print(demo)
+Options:
+  --epochs INTEGER        Number of epochs to train
+  --batch-size INTEGER    Batch size for training
+  --learning-rate FLOAT   Learning rate for optimizer
+  --hidden-dim INTEGER    Hidden dimension for the model
+  --num-heads INTEGER     Number of attention heads
+  --num-layers INTEGER    Number of transformer layers
+  --split                 Whether to split the dataset
+  --normalize TEXT        Normalization method. (None, minmax)
+  --ms2-data-path TEXT    Path to MS2 data
+  --ms1-data-path TEXT    Path to MS1 data
+  --checkpoint-path TEXT  Path to save the best model
+  --use-wandb             Enable Weights & Biases logging
+  --threads INTEGER       Number of threads for data loading
+  --help                  Show this message and exit.
 ```
 
 ## Usage
 
-Add detailed information and examples on how to use the project, covering its major features and functions.
+There is an example bash script for running a training example, which can be subitted via SLURM job
 
-```python
-# More usage examples (Python)
-import my_project
-
-demo = my_project.advanced_function(parameter1='value1')
-print(demo)
-```
-```r
-# More usage examples (R)
-library(demoProject)
-
-demo <- advanced_function(parameter1 = "value1")
-print(demo)
+```bash
+sbatch --job-name=myjob \
+       --output=myjob_%j.out \
+       --error=myjob_%j.err \
+       --time=10:00:00 \
+       --ntasks=1 \
+       --gres=gpu:1 \
+       --cpus-per-task=4 \
+       --mem=16G \
+       run_trainer.sh
 ```
 
 ## Contribute
@@ -78,4 +94,4 @@ If you have any issues or need help, please open an [issue](https://github.com/h
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [BSD-3 License](LICENSE).
