@@ -1,0 +1,41 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "dquartic"
+version = "0.1.0"
+description = "A diffusion model for deconvolution of DIA-MS data"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+click = "^8.0.0"
+torch = "^1.9.0"
+torchvision = "^0.10.0"
+wandb = "^0.12.0"
+matplotlib = "^3.4.0"
+tqdm = "^4.62.0"
+numpy = "^1.21.0"
+
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.0"
+black = "^21.9b0"
+isort = "^5.9.0"
+
+[tool.poetry.scripts]
+dquartic = "dquartic.cli:cli"
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
