@@ -94,7 +94,7 @@ class DDIMDiffusionModel:
         batch_size = x_start.size(0)
         t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
 
-        noise = torch.randn_like(x_start) if not noise else noise
+        noise = torch.randn_like(x_start) if noise is None else noise
         x_t = self.q_sample(x_start, t, noise)
 
         # Predict noise
