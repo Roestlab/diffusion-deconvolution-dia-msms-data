@@ -1,0 +1,85 @@
+digraph DiffusionModel {
+    rankdir=TB;
+    node [shape=box, style=filled, color=lightblue];
+    
+    subgraph cluster_0 {
+        label = "DDIMDiffusionModel";
+        style=filled;
+        color=lightgrey;
+        
+        input [label="Input (x_start, x_cond)"];
+        noise [label="Noise Generation"];
+        q_sample [label="q_sample"];
+        CustomTransformer [label="CustomTransformer"];
+        p_sample [label="p_sample"];
+        loss [label="Loss Calculation"];
+        output [label="Output (x_t_prev or loss)"];
+        
+        input -> noise;
+        input -> q_sample;
+        noise -> q_sample;
+        q_sample -> CustomTransformer;
+        CustomTransformer -> p_sample;
+        CustomTransformer -> loss;
+        p_sample -> output;
+        loss -> output;
+    }
+    
+    subgraph cluster_1 {
+        label = "CustomTransformer";
+        style=filled;
+        color=lightgrey;
+        
+        transformer_input [label="Input (x_t, x_cond, t)"];
+        input_proj [label="Input Projection"];
+        cond_proj [label="Conditional Projection"];
+        time_emb [label="Time Embedding"];
+        rope [label="RoPE"];
+        
+        transformer_layers [label="Transformer Layers"];
+        
+        output_proj [label="Output Projection"];
+        transformer_output [label="Output (eps_pred)"];
+        
+        transformer_input -> input_proj;
+        transformer_input -> cond_proj;
+        transformer_input -> time_emb;
+        
+        input_proj -> rope;
+        cond_proj -> rope;
+        
+        rope -> transformer_layers;
+        time_emb -> transformer_layers;
+        transformer_layers -> output_proj;
+        
+        output_proj -> transformer_output;
+    }
+    
+    subgraph cluster_2 {
+        label = "CustomTransformerLayer";
+        style=filled;
+        color=lightgrey;
+        
+        attention [label="MultiheadAttention"];
+        norm1 [label="LayerNorm 1"];
+        ff [label="FeedForward"];
+        norm2 [label="LayerNorm 2"];
+        
+        attention -> norm1 -> ff -> norm2;
+    }
+    
+    subgraph cluster_3 {
+        label = "TimeEmbedding";
+        style=filled;
+        color=lightgrey;
+        
+        linear1 [label="Linear 1"];
+        gelu [label="GELU"];
+        linear2 [label="Linear 2"];
+        
+        linear1 -> gelu -> linear2;
+    }
+    
+    CustomTransformer -> transformer_input [style=dashed, color=red];
+    transformer_output -> CustomTransformer [style=dashed, color=red];
+}
