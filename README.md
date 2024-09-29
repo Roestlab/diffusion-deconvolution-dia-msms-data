@@ -43,7 +43,7 @@ pip install .
 
 ## Quick Start
 
-The library had a CLI for training the diffusion model.
+The library has a CLI for training the diffusion model.
 
 ```bash
 $ dquartic train --help
