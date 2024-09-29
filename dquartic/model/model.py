@@ -104,12 +104,11 @@ class DDIMDiffusionModel:
         return loss
 
 
-def train_model(diffusion_model, dataloader, optimizer, num_epochs, device):
+def train_model(diffusion_model, dataloader, optimizer, num_epochs, device, use_wandb=True, checkpoint_path = "best_model.pth"):
     model = diffusion_model.model
     model.train()
 
     best_loss = float("inf")  # Initialize best loss to infinity
-    checkpoint_path = "best_model.pth"  # Path to save the best model
 
     for epoch in range(num_epochs):
         epoch_losses = []
@@ -129,9 +128,10 @@ def train_model(diffusion_model, dataloader, optimizer, num_epochs, device):
             optimizer.step()
 
             # Log batch loss
-            wandb.log(
-                {"batch/train_loss": loss.item(), "batch": batch_idx + epoch * len(dataloader)}
-            )
+            if use_wandb:
+                wandb.log(
+                    {"batch/train_loss": loss.item(), "batch": batch_idx + epoch * len(dataloader)}
+                )
 
             epoch_losses.append(loss.item())
 
@@ -139,13 +139,14 @@ def train_model(diffusion_model, dataloader, optimizer, num_epochs, device):
         avg_train_loss = sum(epoch_losses) / len(epoch_losses) if epoch_losses else float("nan")
 
         # Log epoch metrics
-        wandb.log(
-            {
-                "epoch": epoch,
-                "train/loss": avg_train_loss,
-                "learning_rate": optimizer.param_groups[0]["lr"],
-            }
-        )
+        if use_wandb:
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "train/loss": avg_train_loss,
+                    "learning_rate": optimizer.param_groups[0]["lr"],
+                }
+            )
 
         print(f"Epoch {epoch + 1}, Average Loss: {avg_train_loss:.4f}")
 
