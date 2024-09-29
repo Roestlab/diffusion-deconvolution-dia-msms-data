@@ -87,14 +87,14 @@ class DDIMDiffusionModel:
 
         return x_t
 
-    def train_step(self, x_start, x_cond):
+    def train_step(self, x_start, x_cond, noise=None):
         """
         Perform a single training step.
         """
         batch_size = x_start.size(0)
         t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
 
-        noise = torch.randn_like(x_start)
+        noise = torch.randn_like(x_start) if noise is None else noise
         x_t = self.q_sample(x_start, t, noise)
 
         # Predict noise
@@ -115,9 +115,10 @@ def train_model(diffusion_model, dataloader, optimizer, num_epochs, device, use_
 
         for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
             x_start, x_cond = ms2_1.to(device), ms1_1.to(device)  # Unpack and move to device
+            x_noise = ms2_2.to(device)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.zero_grad()
-            loss = diffusion_model.train_step(x_start, x_cond)
+            loss = diffusion_model.train_step(x_start, x_cond, x_noise)
 
             # Check for NaN loss
             if torch.isnan(loss):
