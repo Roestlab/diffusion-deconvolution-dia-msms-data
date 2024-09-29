@@ -2,7 +2,7 @@
 
 Apply diffusion models to deconvolute highly multiplexed DIA-MS/MS data by conditioning on MS1 signals to generate cleaner MS2 data for downstream analysis.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![](https://img.shields.io/badge/License-BSD--3--Clause-blue?style=for-the-badge)
 
 ## Abstract
 
