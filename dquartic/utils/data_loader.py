@@ -16,13 +16,7 @@ class DIAMSDataset(Dataset):
         self.ms2_file = ms2_file
         self.ms1_file = ms1_file
         
-        # Store normalization parameters if needed
         self.normalize = normalize
-        if normalize == 'minmax':
-            self.ms2_min = self.ms2_data.min()
-            self.ms2_max = self.ms2_data.max()
-            self.ms1_min = self.ms1_data.min()
-            self.ms1_max = self.ms1_data.max()
         
         self.split = split
         if split:
@@ -45,6 +39,11 @@ class DIAMSDataset(Dataset):
             ms1_sample_split_2 = self.ms1_data[split_2_idx]
             
             if self.normalize == 'minmax':
+                self.ms2_min = np.min([ms2_sample_split_1.min(), ms2_sample_split_2.min()])
+                self.ms2_max = np.max([ms2_sample_split_1.max(), ms2_sample_split_2.max()])
+                self.ms1_min = np.min([ms1_sample_split_1.min(), ms1_sample_split_2.min()])
+                self.ms1_max = np.max([ms1_sample_split_1.max(), ms1_sample_split_2.max()])
+                
                 ms2_sample_split_1 = (ms2_sample_split_1 - self.ms2_min) / (self.ms2_max - self.ms2_min)
                 ms1_sample_split_1 = (ms1_sample_split_1 - self.ms1_min) / (self.ms1_max - self.ms1_min)
                 ms2_sample_split_2 = (ms2_sample_split_2 - self.ms2_min) / (self.ms2_max - self.ms2_min)
@@ -59,6 +58,11 @@ class DIAMSDataset(Dataset):
             ms1_sample = self.ms1_data[idx]
             
             if self.normalize == 'minmax':
+                self.ms2_min = ms2_sample.min()
+                self.ms2_max = ms2_sample.max()
+                self.ms1_min = ms1_sample.min()
+                self.ms1_max = ms1_sample.max()
+                
                 ms2_sample = (ms2_sample - self.ms2_min) / (self.ms2_max - self.ms2_min)
                 ms1_sample = (ms1_sample - self.ms1_min) / (self.ms1_max - self.ms1_min)
             
