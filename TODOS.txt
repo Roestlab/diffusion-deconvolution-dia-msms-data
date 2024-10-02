@@ -1,6 +1,0 @@
-1. Dataloaders for MS1+MS2 data
-2. Implement base diffusion model from PyTorch
-3. Adapter layer for MS data to input dimensions of above
-4. Maybe custom training loop
-5. Eval code
-6. Benchmark if time
