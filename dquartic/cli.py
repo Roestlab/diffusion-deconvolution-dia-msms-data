@@ -17,7 +17,6 @@ def cli():
 @click.option('--hidden-dim', default=1024, help='Hidden dimension for the model')
 @click.option('--num-heads', default=8, help='Number of attention heads')
 @click.option('--num-layers', default=8, help='Number of transformer layers')
-@click.option('--split', is_flag=True, help='Whether to split the dataset')
 @click.option('--normalize', default=None, help='Normalization method. (None, minmax)')
 @click.option('--ms2-data-path', default='bigdata/ms2_data_cat_int32.npy', help='Path to MS2 data')
 @click.option('--ms1-data-path', default='bigdata/ms1_data_int32.npy', help='Path to MS1 data')
@@ -38,7 +37,7 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
         print("No GPUs available.")
         
     # Your training code here
-    dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=normalize,  split=split)
+    dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=normalize)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
