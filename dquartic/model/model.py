@@ -111,6 +111,7 @@ def train_model(diffusion_model, dataloader, optimizer, num_epochs, device, use_
     best_loss = float("inf")  # Initialize best loss to infinity
 
     for epoch in range(num_epochs):
+        dataloader.dataset.reset_epoch()
         epoch_losses = []
 
         for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
