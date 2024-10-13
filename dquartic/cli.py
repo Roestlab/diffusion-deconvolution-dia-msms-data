@@ -46,7 +46,7 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
     diffusion_model = DDIMDiffusionModel(model=model, num_timesteps=1000, device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
     
-    if use-checkpoint:
+    if use_checkpoint:
         try:
             diffusion_model.load(checkpoint_path) 
         except Exception as e:
