@@ -6,13 +6,13 @@ import torch.nn.functional as F
 
 import wandb
 
-# sys.path.append('/content/drive/MyDrive/2024-07-diffusionDeconvolution/code/')
-# sys.path.append('code/')
+from .model_interface import ModelInterface
 from .building_blocks import get_beta_schedule, get_alpha, get_alpha_bar
 
 
-class DDIMDiffusionModel:
+class DDIMDiffusionModel(ModelInterface):
     def __init__(self, model, num_timesteps=1000, device="cuda"):
+        super().__init__()
         self.model = model
         self.num_timesteps = num_timesteps
         self.device = device
@@ -104,11 +104,29 @@ class DDIMDiffusionModel:
         return loss
 
 
-def train_model(diffusion_model, dataloader, optimizer, num_epochs, device, use_wandb=True, checkpoint_path = "best_model.pth"):
+def train_model(
+    diffusion_model,
+    dataloader,
+    optimizer,
+    num_epochs,
+    device,
+    use_wandb=True,
+    checkpoint_path="best_model.pth",
+    num_warmup_steps=0,
+    num_training_steps=None,
+):
     model = diffusion_model.model
     model.train()
 
-    best_loss = float("inf")  # Initialize best loss to infinity
+    best_loss = float("inf")
+
+    # Initialize the learning rate scheduler
+    num_training_steps = (
+        len(dataloader) * num_epochs if num_training_steps is None else num_training_steps
+    )
+    lr_scheduler = diffusion_model.lr_scheduler_class(
+        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps
+    )
 
     for epoch in range(num_epochs):
         dataloader.dataset.reset_epoch()
@@ -128,6 +146,9 @@ def train_model(diffusion_model, dataloader, optimizer, num_epochs, device, use_
 
             loss.backward()
             optimizer.step()
+
+            # Step the learning rate scheduler
+            lr_scheduler.step(epoch, loss.item())
 
             # Log batch loss
             if use_wandb:
