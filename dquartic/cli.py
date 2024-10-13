@@ -48,7 +48,7 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
     
     if use-checkpoint:
         try:
-            diffusion_model.load(checkpoint_path) 
+            diffusion_model.model.load(checkpoint_path) 
         except Exception as e:
             print(f"Error loading from checkpoint: {e}")
     if use_wandb:
