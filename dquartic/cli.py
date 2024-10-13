@@ -38,7 +38,7 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
         print("No GPUs available.")
         
     # Your training code here
-    dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=normalize,  split=split)
+    dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=normalize)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -58,7 +58,8 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
             "num_layers": num_layers
         })
 
-    train_model(diffusion_model, data_loader, optimizer, epochs, device, use_wandb, checkpoint_path)
+    train_model(diffusion_model, data_loader, optimizer, epochs, device, use_wandb, checkpoint_path, num_warmup_steps, num_training_steps)
+
 
     if use_wandb:
         wandb.finish()
