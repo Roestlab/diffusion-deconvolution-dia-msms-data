@@ -12,6 +12,7 @@ def cli():
 
 @cli.command()
 @click.option('--epochs', default=1000, help='Number of epochs to train')
+@click.option('--warmup-epochs', default=5, help='Number of warmup epochs for learning rate scheduler')
 @click.option('--batch-size', default=1, help='Batch size for training')
 @click.option('--learning-rate', default=1e-6, help='Learning rate for optimizer')
 @click.option('--hidden-dim', default=1024, help='Hidden dimension for the model')
@@ -23,8 +24,7 @@ def cli():
 @click.option('--checkpoint-path', default='best_model.pth', help='Path to save the best model')
 @click.option('--use-wandb', is_flag=True, help='Enable Weights & Biases logging')
 @click.option('--threads', default=4, help='Number of threads for data loading')
-@click.option('--use-checkpoint', default=False, help='Continue training from a previous checkpoint saved at checkpoint-path')
-def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, split, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads, use_checkpoint):
+def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads):
     """
     Train a DDIM model on the DIAMS dataset.
     """
@@ -37,20 +37,13 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
     else:
         print("No GPUs available.")
         
-    # Your training code here
     dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=normalize)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
     model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
-    diffusion_model = DDIMDiffusionModel(model=model, num_timesteps=1000, device=device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-    
-    if use_checkpoint:
-        try:
-            diffusion_model.model.load(checkpoint_path) 
-        except Exception as e:
-            print(f"Error loading from checkpoint: {e}")
+    diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=1000, device=device)
+            
     if use_wandb:
         wandb.init(project="dquartic", config={
             "learning_rate": learning_rate,
@@ -63,7 +56,7 @@ def train(epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, 
             "num_layers": num_layers
         })
 
-    train_model(diffusion_model, data_loader, optimizer, epochs, device, use_wandb, checkpoint_path)
+    diffusion_model.train(data_loader, batch_size, epochs, warmup_epochs, learning_rate, use_wandb, checkpoint_path)
 
     if use_wandb:
         wandb.finish()

@@ -6,14 +6,15 @@ import torch.nn.functional as F
 
 import wandb
 
-# sys.path.append('/content/drive/MyDrive/2024-07-diffusionDeconvolution/code/')
-# sys.path.append('code/')
+from .model_interface import ModelInterface
 from .building_blocks import get_beta_schedule, get_alpha, get_alpha_bar
 
 
-class DDIMDiffusionModel:
-    def __init__(self, model, num_timesteps=1000, device="cuda"):
-        self.model = model
+class DDIMDiffusionModel(ModelInterface):
+    def __init__(self, model_class, num_timesteps=1000, device="cuda", **kwargs):
+        super().__init__()
+        self.model = None
+        self.build(model_class, **kwargs)
         self.num_timesteps = num_timesteps
         self.device = device
 
@@ -102,59 +103,3 @@ class DDIMDiffusionModel:
 
         loss = F.mse_loss(eps_pred, noise)
         return loss
-
-
-def train_model(diffusion_model, dataloader, optimizer, num_epochs, device, use_wandb=True, checkpoint_path = "best_model.pth"):
-    model = diffusion_model.model
-    model.train()
-
-    best_loss = float("inf")  # Initialize best loss to infinity
-
-    for epoch in range(num_epochs):
-        dataloader.dataset.reset_epoch()
-        epoch_losses = []
-
-        for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
-            x_start, x_cond = ms2_1.to(device), ms1_1.to(device)  # Unpack and move to device
-            x_noise = ms2_2.to(device)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.zero_grad()
-            loss = diffusion_model.train_step(x_start, x_cond, x_noise)
-
-            # Check for NaN loss
-            if torch.isnan(loss):
-                print(f"NaN detected at epoch {epoch}, batch {batch_idx}")
-                continue  # Skip this iteration
-
-            loss.backward()
-            optimizer.step()
-
-            # Log batch loss
-            if use_wandb:
-                wandb.log(
-                    {"batch/train_loss": loss.item(), "batch": batch_idx + epoch * len(dataloader)}
-                )
-
-            epoch_losses.append(loss.item())
-
-        # Calculate average loss for the epoch
-        avg_train_loss = sum(epoch_losses) / len(epoch_losses) if epoch_losses else float("nan")
-
-        # Log epoch metrics
-        if use_wandb:
-            wandb.log(
-                {
-                    "epoch": epoch,
-                    "train/loss": avg_train_loss,
-                    "learning_rate": optimizer.param_groups[0]["lr"],
-                }
-            )
-
-        print(f"Epoch {epoch + 1}, Average Loss: {avg_train_loss:.4f}")
-
-        # Check if this is the best loss so far
-        if avg_train_loss < best_loss:
-            best_loss = avg_train_loss
-            # Save the model checkpoint
-            torch.save(model.state_dict(), checkpoint_path)
-            print(f"Model checkpoint saved at epoch {epoch + 1} with loss: {best_loss:.4f}")
