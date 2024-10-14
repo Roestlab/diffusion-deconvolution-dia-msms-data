@@ -1,7 +1,7 @@
 import click
 from .utils.data_loader import DIAMSDataset
 from .model.building_blocks import CustomTransformer
-from .model.model import DDIMDiffusionModel, train_model
+from .model.model import DDIMDiffusionModel
 from torch.utils.data import DataLoader
 import torch
 import wandb
