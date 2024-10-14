@@ -43,7 +43,7 @@ def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_head
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
     model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
-    diffusion_model = DDIMDiffusionModel(model=model, num_timesteps=1000, device=device)
+    diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=1000, device=device)
     
     if use_checkpoint:
         try:

@@ -219,12 +219,25 @@ class ModelInterface(object):
     # Public Methods #
     ##################
     
+    def build(self, model_class, **kwargs):
+        """
+        Build the model.
+        """
+        self.model = model_class
+        self._init_for_training()
+    
     def get_parameter_num(self):
         """
         Get total number of parameters in model.
         """
         return np.sum([p.numel() for p in self.model.parameters()])
     
+    def train_step(self, x_start, x_cond, noise=None):
+        """
+        Perform a single training step. Implemented in the subclass.
+        """
+        pass
+        
     def train_with_warmup(
         self,
         dataloader,
@@ -387,15 +400,6 @@ class ModelInterface(object):
         return self.lr_scheduler_class(
             self.optimizer, num_warmup_steps=warmup_epoch, num_training_steps=epoch
         )
-        
-    def _train_one_batch(self, x_start, x_cond, x_noise):
-        """Train one batch"""
-        self.optimizer.zero_grad()
-        loss = self.model.train_step(x_start, x_cond, x_noise)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-        self.optimizer.step()
-        return loss.item()
     
     def _train_one_epoch(self, epoch, dataloader):
         """Train one epoch"""
@@ -413,4 +417,13 @@ class ModelInterface(object):
                 )
     
         return batch_loss
+    
+    def _train_one_batch(self, x_start, x_cond, x_noise):
+        """Train one batch"""
+        self.optimizer.zero_grad()
+        loss = self.train_step(x_start, x_cond, x_noise)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+        self.optimizer.step()
+        return loss.item()
             
