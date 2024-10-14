@@ -288,9 +288,10 @@ class ModelInterface(object):
             # Check if this is the best loss so far
             if avg_train_loss < best_loss:
                 best_loss = avg_train_loss
+                best_epoch = epoch + 1
                 # Save the model checkpoint
                 torch.save(self.model.state_dict(), checkpoint_path)
-                print(f"Model checkpoint saved at epoch {epoch + 1} with loss: {best_loss:.4f}")
+                # print(f"Model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.4f}")
             
             continue_training = self.callback_handler.epoch_callback(
                 epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -298,6 +299,7 @@ class ModelInterface(object):
             if not continue_training:
                 print(f"Training stopped at epoch {epoch}")
                 break
+        print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
             
     def train(
         self,
@@ -345,9 +347,10 @@ class ModelInterface(object):
                 
                 if np.mean(batch_loss) < best_loss:
                     best_loss = np.mean(batch_loss)
+                    best_epoch = epoch + 1
                     # Save the model checkpoint
                     torch.save(self.model.state_dict(), checkpoint_path)
-                    print(f"Model checkpoint saved at epoch {epoch + 1} with loss: {best_loss:.4f}")
+                    # print(f"Model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.4f}")
                 
                 continue_training = self.callback_handler.epoch_callback(
                     epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -355,6 +358,7 @@ class ModelInterface(object):
                 if not continue_training:
                     print(f"Training stopped at epoch {epoch}")
                     break
+            print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
             
         
     ###################
