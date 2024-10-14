@@ -237,7 +237,7 @@ class ModelInterface(object):
         """
         Perform a single training step. Implemented in the subclass.
         """
-        pass
+        raise NotImplementedError
         
     def train_with_warmup(
         self,
