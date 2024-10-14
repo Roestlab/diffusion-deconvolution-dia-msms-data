@@ -1,4 +1,4 @@
-# diffusion-deconvolution-dia-msms-data (d^4)
+# diffusion-deconvolution-dia-msms-data (D<sup>4</sup>)
 
 ## 🚀 Winner of the Donnelly Centre Innovation and Commercialization award!
 
@@ -32,13 +32,25 @@ cd diffusion-deconvolution-dia-msms
 ```
 
 ### 2. Set Up the Environment
+
 It's recommended to use a virtual environment. You can create one using Python's built-in venv module:
 
 ```bash
-virtualenv venv
-source venv/bin/activate  
+virtualenv dquartic
+source dquartic/bin/activate  
 ```
+
+Alternatively, you can use conda:
+
+```bash
+conda create -n dquartic python=3.9
+conda activate dquartic
+```
+
 ### 3. Install the library
+
+To install the library and its dependencies, run:
+
 ```bash
 pip install .
 ```
@@ -54,20 +66,20 @@ Usage: dquartic train [OPTIONS]
   Train a DDIM model on the DIAMS dataset.
 
 Options:
-  --epochs INTEGER        Number of epochs to train
-  --batch-size INTEGER    Batch size for training
-  --learning-rate FLOAT   Learning rate for optimizer
-  --hidden-dim INTEGER    Hidden dimension for the model
-  --num-heads INTEGER     Number of attention heads
-  --num-layers INTEGER    Number of transformer layers
-  --split                 Whether to split the dataset
-  --normalize TEXT        Normalization method. (None, minmax)
-  --ms2-data-path TEXT    Path to MS2 data
-  --ms1-data-path TEXT    Path to MS1 data
-  --checkpoint-path TEXT  Path to save the best model
-  --use-wandb             Enable Weights & Biases logging
-  --threads INTEGER       Number of threads for data loading
-  --help                  Show this message and exit.
+  --epochs INTEGER         Number of epochs to train
+  --warmup-epochs INTEGER  Number of warmup epochs for learning rate scheduler
+  --batch-size INTEGER     Batch size for training
+  --learning-rate FLOAT    Learning rate for optimizer
+  --hidden-dim INTEGER     Hidden dimension for the model
+  --num-heads INTEGER      Number of attention heads
+  --num-layers INTEGER     Number of transformer layers
+  --normalize TEXT         Normalization method. (None, minmax)
+  --ms2-data-path TEXT     Path to MS2 data
+  --ms1-data-path TEXT     Path to MS1 data
+  --checkpoint-path TEXT   Path to save the best model
+  --use-wandb              Enable Weights & Biases logging
+  --threads INTEGER        Number of threads for data loading
+  --help                   Show this message and exit.
 ```
 
 ## Usage
