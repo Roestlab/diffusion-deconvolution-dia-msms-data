@@ -1,4 +1,5 @@
 from typing import List
+import os
 import math
 import functools
 import numpy as np
@@ -259,7 +260,10 @@ class ModelInterface(object):
         # model = diffusion_model.model
         self.model.train()
 
-        best_loss = float("inf")
+        # Load checkpoint if available
+        start_epoch, best_loss, lr_scheduler = self.load_checkpoint(lr_scheduler, checkpoint_path, self.device)
+
+        best_epoch = start_epoch
 
         for epoch in range(num_epochs):
             dataloader.dataset.reset_epoch()
@@ -268,7 +272,6 @@ class ModelInterface(object):
 
             # Step the learning rate scheduler
             lr_scheduler.step(epoch, np.mean(batch_loss))
-
 
             # Calculate average loss for the epoch
             avg_train_loss = np.mean(batch_loss)
@@ -289,9 +292,7 @@ class ModelInterface(object):
             if avg_train_loss < best_loss:
                 best_loss = avg_train_loss
                 best_epoch = epoch + 1
-                # Save the model checkpoint
-                torch.save(self.model.state_dict(), checkpoint_path)
-                # print(f"Model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.4f}")
+                self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
             
             continue_training = self.callback_handler.epoch_callback(
                 epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -327,9 +328,13 @@ class ModelInterface(object):
             ) 
         else:
             self._prepare_training(learning_rate, **kwargs)
-            best_loss = float("inf")
             
-            for epoch in range(epochs):
+            # Load checkpoint if available
+            start_epoch, best_loss, _ = self.load_checkpoint(None, checkpoint_path, self.device)
+    
+            best_epoch = start_epoch
+            
+            for epoch in range(start_epoch, epochs):
                 dataloader.dataset.reset_epoch()
                 batch_loss = self._train_one_epoch(epoch, dataloader)
                 
@@ -348,9 +353,7 @@ class ModelInterface(object):
                 if np.mean(batch_loss) < best_loss:
                     best_loss = np.mean(batch_loss)
                     best_epoch = epoch + 1
-                    # Save the model checkpoint
-                    torch.save(self.model.state_dict(), checkpoint_path)
-                    # print(f"Model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.4f}")
+                    self.save_checkpoint(None, epoch, best_loss, checkpoint_path)
                 
                 continue_training = self.callback_handler.epoch_callback(
                     epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -359,6 +362,39 @@ class ModelInterface(object):
                     print(f"Training stopped at epoch {epoch}")
                     break
             print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
+            
+    def load_checkpoint(self, scheduler, checkpoint_path, device):
+        """
+        Load model, optimizer, and scheduler states from a checkpoint file if available.
+        """
+        if os.path.exists(checkpoint_path):
+            print(f"Loading checkpoint from {checkpoint_path}...")
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.lambda_lr.load_state_dict(checkpoint['scheduler_state_dict'])
+            epoch = checkpoint['epoch']
+            best_loss = checkpoint['best_loss']
+            print(f"Resumed from ({checkpoint_path}) epoch {epoch}, best loss {best_loss:.6f}")
+        else:
+            print(f"No checkpoint ({checkpoint_path}) found. Starting from scratch.")
+            epoch = 0
+            best_loss = float('inf')
+            scheduler = None
+        
+        return epoch, best_loss, scheduler
+
+    def save_checkpoint(self, scheduler, epoch, best_loss, checkpoint_path):
+        """
+        Save the current state of the model, optimizer, and scheduler to a checkpoint file.
+        """
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.lambda_lr.state_dict() if scheduler is not None else None,
+            'best_loss': best_loss,
+        }, checkpoint_path)
             
         
     ###################

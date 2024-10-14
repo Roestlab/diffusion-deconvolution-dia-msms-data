@@ -24,8 +24,7 @@ def cli():
 @click.option('--checkpoint-path', default='best_model.pth', help='Path to save the best model')
 @click.option('--use-wandb', is_flag=True, help='Enable Weights & Biases logging')
 @click.option('--threads', default=4, help='Number of threads for data loading')
-@click.option('--use-checkpoint', default=False, help='Continue training from a previous checkpoint saved at checkpoint-path')
-def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads, use_checkpoint):
+def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads):
     """
     Train a DDIM model on the DIAMS dataset.
     """
@@ -44,12 +43,6 @@ def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_head
         
     model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
     diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=1000, device=device)
-    
-    if use_checkpoint:
-        try:
-            diffusion_model.load(checkpoint_path) 
-        except Exception as e:
-            print(f"Error loading from checkpoint: {e}")
             
     if use_wandb:
         wandb.init(project="dquartic", config={
@@ -64,7 +57,6 @@ def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_head
         })
 
     diffusion_model.train(data_loader, batch_size, epochs, warmup_epochs, learning_rate, use_wandb, checkpoint_path)
-
 
     if use_wandb:
         wandb.finish()
