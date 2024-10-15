@@ -1,4 +1,14 @@
 #!/bin/sh
+#SBATCH --job-name=dquartic_training         # Job name
+#SBATCH --account=def-hroest                  # Account name
+#SBATCH --time=5-00:00:00                      # Time limit (5 days)
+#SBATCH --nodes=1                              # Number of nodes
+#SBATCH --ntasks=1                             # Number of tasks (usually 1 for GPU jobs)
+#SBATCH --cpus-per-task=4                      # Number of CPU cores per task
+#SBATCH --mem=16G                              # Memory per node
+#SBATCH --gres=gpu:1                           # Request 1 GPU
+#SBATCH --output=dquartic_train_%j.log        # Output file
+#SBATCH --error=dquartic_train_%j.err         # Error file
 
 # source code/py310/bin/activate
 
