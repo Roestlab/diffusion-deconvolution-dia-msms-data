@@ -380,7 +380,7 @@ class ModelInterface(object):
             print(f"No checkpoint ({checkpoint_path}) found. Starting from scratch.")
             epoch = 0
             best_loss = float('inf')
-            scheduler = None
+            scheduler = scheduler
         
         return epoch, best_loss, scheduler
 
