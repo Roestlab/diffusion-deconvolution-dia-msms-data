@@ -7,6 +7,8 @@ import pandas as pd
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 import wandb
+from io import BytesIO
+from PIL import Image as PILImage
 
 class LR_SchedulerInterface(object):
     def __init__(self, optimizer: torch.optim.Optimizer, **kwargs):
@@ -460,10 +462,10 @@ class ModelInterface(object):
         table.add_data(
             epoch,
             loss,
-            wandb.Image(ms2_target_plot.superFig),
-            wandb.Image(ms1_plot.superFig),
-            wandb.Image(ms2_input_plot.superFig),
-            wandb.Image(pred_plot.superFig),
+            wandb.Image(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig)),
+            wandb.Image(PILImage.open(ms1_plot.superFig)),
+            wandb.Image(PILImage.open(ms2_input_plot.superFig)),
+            wandb.Image(PILImage.open(pred_plot.superFig)),
         )
         wandb.log({"predictions_table": table}, commit=False)
 
@@ -699,3 +701,11 @@ class ModelInterface(object):
             df = df.melt(id_vars=['sample_id'], var_name='y', value_name='intensity')
             ms1_df = pd.concat([ms1_df, df], ignore_index=True)
         return ms1_df
+    
+    @staticmethod
+    def _convert_mpl_fig_to_bytes(fig):
+        """Convert a matplotlib figure to bytes"""
+        buf = BytesIO()
+        fig.savefig(buf, format='png')
+        buf.seek(0)
+        return buf
