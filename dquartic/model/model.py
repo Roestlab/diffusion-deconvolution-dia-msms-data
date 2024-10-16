@@ -73,12 +73,12 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t_prev
 
-    def sample(self, x_shape, x_cond, num_steps=50, eta=0.0):
+    def sample(self, x, x_cond, num_steps=50, eta=0.0):
         """
         Generate samples from the model.
         """
-        batch_size = x_shape[0]
-        x_t = torch.randn(x_shape, device=self.device)
+        # batch_size = x_shape[0]
+        x_t = torch.randn_like(x, device=self.device)
 
         time_steps = torch.linspace(self.num_timesteps - 1, 0, num_steps, dtype=torch.long)
 
