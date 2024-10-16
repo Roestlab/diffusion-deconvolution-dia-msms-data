@@ -24,7 +24,15 @@ def cli():
 @click.option('--checkpoint-path', default='best_model.pth', help='Path to save the best model')
 @click.option('--use-wandb', is_flag=True, help='Enable Weights & Biases logging')
 @click.option('--threads', default=4, help='Number of threads for data loading')
-def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads):
+# Wandb settings
+@click.option('--wandb-project', default='dquartic', help='Weigths & Biases project name')
+@click.option('--wandb-name', default=None, help='Weigths & Biases name. If None, Wandb will generate a random name')
+@click.option('--wandb-id', default=None, help='Weigths & Biases run ID')
+@click.option('--wandb-resume', default=None, help='Weigths & Biases resume ID if run crashed or stopped early. Allowed values are None, allow, must, never')
+@click.option('--wandb-architecture', default='DDIM(CustomTransformer)', help='Weigths & Biases model architecture name')
+@click.option('--wandb-dataset', default='Josh_GPF_DIA', help='Weigths & Biases dataset name')
+@click.option('--wandb-mode', default='offline', help='Weigths & Biases mode. (offline, online). Default is offline, which means metrics are only saved locally. You will need to run wandb sync to upload the metrics to the cloud.')
+def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads, wandb_project, wandb_name, wandb_id, wandb_resume, wandb_architecture, wandb_dataset, wandb_mode):
     """
     Train a DDIM model on the DIAMS dataset.
     """
@@ -36,25 +44,33 @@ def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_head
             print(f"Cached Memory: {torch.cuda.memory_reserved(i) / (1024 ** 2)} MB")
     else:
         print("No GPUs available.")
-        
+
     dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=normalize)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
+
     model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
     diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=1000, device=device)
-            
+
     if use_wandb:
-        wandb.init(project="dquartic", config={
-            "learning_rate": learning_rate,
-            "architecture": "DDIM",
-            "dataset": "Josh_GPF_DIA",
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "hidden_dim": hidden_dim,
-            "num_heads": num_heads,
-            "num_layers": num_layers
-        })
+        wandb.init(
+            project=wandb_project,
+            name=wandb_name,
+            id=wandb_id,
+            resume=wandb_resume,
+            config={
+                "learning_rate": learning_rate,
+                "architecture": wandb_architecture,
+                "dataset": wandb_dataset,
+                "epochs": epochs,
+                "batch_size": batch_size,
+                "hidden_dim": hidden_dim,
+                "num_heads": num_heads,
+                "num_layers": num_layers,
+            },
+            settings=wandb.Settings(start_method="fork"),
+            mode=wandb_mode,
+        )
 
     diffusion_model.train(data_loader, batch_size, epochs, warmup_epochs, learning_rate, use_wandb, checkpoint_path)
 
