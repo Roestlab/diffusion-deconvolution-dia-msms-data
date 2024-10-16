@@ -462,10 +462,10 @@ class ModelInterface(object):
         table.add_data(
             epoch,
             loss,
-            wandb.Image(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig)),
-            wandb.Image(PILImage.open(ms1_plot.superFig)),
-            wandb.Image(PILImage.open(ms2_input_plot.superFig)),
-            wandb.Image(PILImage.open(pred_plot.superFig)),
+            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))),
+            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
+            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
+            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
         )
         wandb.log({"predictions_table": table}, commit=False)
 
