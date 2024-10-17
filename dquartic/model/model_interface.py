@@ -419,14 +419,16 @@ class ModelInterface(object):
             'best_loss': best_loss,
         }, checkpoint_path)
 
-    def predict(self, dataloader, num_steps=100, eta=0.0):
+    def predict(self, dataloader, mixture_weights=(0.5, 0.75), num_steps=100, eta=0.0):
         self.model.eval()
         preds = np.array([])
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
             x_start, x_cond = ms2_1, ms1_1  
             x_start = x_start.to(self.device)
             x_cond = x_cond.to(self.device)
-            x_start_rand = torch.randn_like(x_start)
+            # Simulated mixed spectra from target sample and other sample
+            x_start_rand = (ms2_1*mixture_weights[0]) + (ms2_2*mixture_weights[1])
+            x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
             pred = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
             # Store ms2_1, ms1_1, x_start_rand, pred
             pred_data = {'ms2_1': ms2_1, 'ms1_1': ms1_1, 'x_start_rand': x_start_rand.cpu().detach().numpy(), 'pred': pred}
@@ -439,7 +441,7 @@ class ModelInterface(object):
         loss,
         dataloader,
         sample_idx=None,
-        use_synth_mixed_noise=True,
+        mixture_weights=(0.5, 0.75),
         num_steps=100,
         eta=0.0,
     ):
@@ -448,7 +450,7 @@ class ModelInterface(object):
         ms2_target_plot, ms1_plot, ms2_input_plot, pred_plot = self.plot_single_prediction(
             dataloader,
             sample_idx=sample_idx,
-            use_synth_mixed_noise=use_synth_mixed_noise,
+            mixture_weights=mixture_weights,
             num_steps=num_steps,
             eta=eta,
         )
@@ -479,7 +481,7 @@ class ModelInterface(object):
         self,
         dataloader,
         sample_idx=None,
-        use_synth_mixed_noise=True,
+        mixture_weights=(0.5, 0.75),
         num_steps=100,
         eta=0.0,
         plot_type="peakmap",
@@ -492,7 +494,7 @@ class ModelInterface(object):
         Args:
             dataloader (torch.utils.data.DataLoader): The dataloader.
             sample_idx (int, optional): The index of the sample to plot. Defaults to None, in which case a random sample is chosen.
-            use_synth_mixed_noise (bool, optional): Whether to use synthetic mixed noise. This will mix 50% of the target MS2 with 75% of the paired MS2. Defaults to True.
+            mixture_weights (tuple, optional): The weights for the mixture of the two samples. Defaults to (0.5, 0.75).
             num_steps (int, optional): The number of steps to predict. Defaults to 100.
             eta (float, optional): The eta value. Defaults to 0.0.
             plot_type (str, optional): The type of plot. Defaults to 'peakmap'.
@@ -513,13 +515,10 @@ class ModelInterface(object):
         x_start, x_cond = ms2_1, ms1_1
         x_start = x_start.to(self.device).unsqueeze(0)
         x_cond = x_cond.to(self.device).unsqueeze(0)
-        if use_synth_mixed_noise:
-            # Simulated mixed spectra from target sample and other sample
-            x_start_rand = (ms2_1*0.5) + (ms2_2*0.75)
-            x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
-        else:
-            # Random noise
-            x_start_rand = torch.randn_like(x_start)
+
+        # Simulated mixed spectra from target sample and other sample
+        x_start_rand = (ms2_1*mixture_weights[0]) + (ms2_2*mixture_weights[1])
+        x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
             
         pred = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
 
