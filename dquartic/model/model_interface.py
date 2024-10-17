@@ -273,7 +273,7 @@ class ModelInterface(object):
         self.model.train()
 
         # Load checkpoint if available
-        start_epoch, best_loss, lr_scheduler = self.load_checkpoint(lr_scheduler, checkpoint_path, self.device)
+        start_epoch, best_loss, lr_scheduler = self.load_checkpoint(lr_scheduler, f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.pth", self.device)
 
         best_epoch = start_epoch
 
@@ -299,7 +299,9 @@ class ModelInterface(object):
                 )
 
             print(f"[Training] Epoch={epoch+1}, lr={lr_scheduler.get_last_lr()[0]}, loss={np.mean(batch_loss)}")
-
+            
+            self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.pth")
+            
             # Check if this is the best loss so far
             if avg_train_loss < best_loss:
                 best_loss = avg_train_loss
@@ -344,7 +346,7 @@ class ModelInterface(object):
             self._prepare_training(learning_rate, **kwargs)
 
             # Load checkpoint if available
-            start_epoch, best_loss, _ = self.load_checkpoint(None, checkpoint_path, self.device)
+            start_epoch, best_loss, _ = self.load_checkpoint(None, f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.pth", self.device)
 
             best_epoch = start_epoch
 
@@ -363,7 +365,9 @@ class ModelInterface(object):
                     )
 
                 print(f"[Training] Epoch={epoch+1}, lr={self.optimizer.param_groups[0]['lr']}, loss={np.mean(batch_loss)}")
-
+                
+                self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.pth")
+                
                 if np.mean(batch_loss) < best_loss:
                     best_loss = np.mean(batch_loss)
                     best_epoch = epoch + 1
