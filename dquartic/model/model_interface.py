@@ -300,11 +300,7 @@ class ModelInterface(object):
 
             print(f"[Training] Epoch={epoch+1}, lr={lr_scheduler.get_last_lr()[0]}, loss={np.mean(batch_loss)}")
             
-            self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt")
-            
-            if use_wandb:
-                wandb.log_model( f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt", "dquartic_model_latest_checkpoint", aliases=[f"epoch-{epoch+1}_loss-{round(np.mean(batch_loss), 4)}"])
-                
+            self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt")             
             
             # Check if this is the best loss so far
             if avg_train_loss < best_loss:
@@ -312,7 +308,6 @@ class ModelInterface(object):
                 best_epoch = epoch + 1
                 self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
                 if use_wandb:
-                    wandb.log_model(checkpoint_path, "dquartic_model_best_checkpoint", aliases=[f"epoch-{best_epoch}_loss-{round(best_loss, 4)}"])
                     self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=500, eta=0.0)
 
             continue_training = self.callback_handler.epoch_callback(
@@ -373,16 +368,12 @@ class ModelInterface(object):
                 
                 self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt")
                 
-                if use_wandb:
-                    wandb.log_model( f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt", "dquartic_model_latest_checkpoint", aliases=[f"epoch-{epoch+1}_loss-{round(np.mean(batch_loss), 4)}"])
-                
                 if np.mean(batch_loss) < best_loss:
                     best_loss = np.mean(batch_loss)
                     best_epoch = epoch + 1
                     self.save_checkpoint(None, epoch, best_loss, checkpoint_path)
 
                     if use_wandb:
-                        wandb.log_model(checkpoint_path, "dquartic_model_best_checkpoint", aliases=[f"epoch-{best_epoch}_loss-{round(best_loss, 4)}"])
                         self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=500, eta=0.0)
 
                 continue_training = self.callback_handler.epoch_callback(
