@@ -77,8 +77,7 @@ class DDIMDiffusionModel(ModelInterface):
         """
         Generate samples from the model.
         """
-        # batch_size = x_shape[0]
-        x_t = torch.randn_like(x, device=self.device)
+        x_t = x
 
         time_steps = torch.linspace(self.num_timesteps - 1, 0, num_steps, dtype=torch.long)
 
