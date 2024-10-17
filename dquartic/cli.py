@@ -21,7 +21,7 @@ def cli():
 @click.option('--normalize', default=None, help='Normalization method. (None, minmax)')
 @click.option('--ms2-data-path', default='bigdata/ms2_data_cat_int32.npy', help='Path to MS2 data')
 @click.option('--ms1-data-path', default='bigdata/ms1_data_int32.npy', help='Path to MS1 data')
-@click.option('--checkpoint-path', default='best_model.pth', help='Path to save the best model')
+@click.option('--checkpoint-path', default='best_model.ckpt', help='Path to save the best model')
 @click.option('--use-wandb', is_flag=True, help='Enable Weights & Biases logging')
 @click.option('--threads', default=4, help='Number of threads for data loading')
 # Wandb settings
