@@ -281,7 +281,11 @@ class Attention(Module):
     def forward(self, x, cond = None):
         if self.use_xattn and exists(cond):
             qv = self.to_qv(x).chunk(2, dim = 1)
-            q, v = map(lambda t: rearrange(t, 'b (h c) n -> b h n c', h = self.heads), qv)  
+            q, v = map(lambda t: rearrange(t, 'b (h c) n -> b h n c', h = self.heads), qv)
+
+            if len(cond.shape) == 2:
+                cond = rearrange(cond, 'b n -> b () n')
+
             k = rearrange(self.to_k(cond), 'b (h c) n -> b h n c', h = self.heads)
         else:
             qkv = self.to_qkv(x).chunk(3, dim = 1)
@@ -378,6 +382,9 @@ class Unet1D(Module):
         self.final_conv = nn.Conv1d(init_dim, self.out_dim, 1)
 
     def forward(self, x, x_cond, time):
+        if x.shape[1] < x.shape[2]:
+            x = rearrange(x, 'b n c -> b c n')
+
         x = self.init_conv(x)
 
         r = x.clone()
