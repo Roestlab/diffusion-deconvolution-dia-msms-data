@@ -1,7 +1,6 @@
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 def get_beta_schedule(num_timesteps, beta_start=0.0001, beta_end=0.02):
