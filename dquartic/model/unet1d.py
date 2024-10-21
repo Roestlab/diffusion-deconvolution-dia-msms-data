@@ -75,9 +75,9 @@ class PreNorm(Module):
         self.fn = fn
         self.norm = RMSNorm(dim)
 
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         x = self.norm(x)
-        return self.fn(x)
+        return self.fn(x, *args, **kwargs)
 
 # sinusoidal positional embeds
 
@@ -232,7 +232,7 @@ class Attend(nn.Module):
         return out
 
 class LinearAttention(Module):
-    def __init__(self, dim, heads = 4, dim_head = 32):
+    def __init__(self, dim, heads = 2, dim_head = 8):
         super().__init__()
         self.scale = dim_head ** -0.5
         self.heads = heads
@@ -260,7 +260,7 @@ class LinearAttention(Module):
         return self.to_out(out)
 
 class Attention(Module):
-    def __init__(self, dim, heads = 4, dim_head = 32, flash = False, use_xattn = False, cond_dim = 1):
+    def __init__(self, dim, heads = 2, dim_head = 8, flash = False, use_xattn = False, cond_dim = 1):
         super().__init__()
         self.use_xattn = use_xattn
         self.heads = heads
@@ -309,8 +309,8 @@ class Unet1D(Module):
         has_condition = False,
         learned_variance = False,
         sinusoidal_pos_emb_theta = 10000,
-        attn_dim_head = 32,
-        attn_heads = 4,
+        attn_dim_head = 8,
+        attn_heads = 2,
         attn_downsampled_l = 625
     ):
         super().__init__()
