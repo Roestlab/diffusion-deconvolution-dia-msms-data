@@ -74,8 +74,8 @@ class DIAMSDataset(Dataset):
         if self.normalize == 'minmax':
             self.ms2_min = np.min([ms2_sample_split_1.min(), ms2_sample_split_2.min()])
             self.ms2_max = np.max([ms2_sample_split_1.max(), ms2_sample_split_2.max()])
-            self.ms1_min = np.min([ms1_sample_split_1.min(), ms1_sample_split_2.min()])
-            self.ms1_max = np.max([ms1_sample_split_1.max(), ms1_sample_split_2.max()])
+            self.ms1_min = np.min([ms1_sample_split_1.min()])
+            self.ms1_max = np.max([ms1_sample_split_1.max()])
             
             ms2_sample_split_1 = (ms2_sample_split_1 - self.ms2_min) / (self.ms2_max - self.ms2_min)
             ms1_sample_split_1 = (ms1_sample_split_1 - self.ms1_min) / (self.ms1_max - self.ms1_min)
