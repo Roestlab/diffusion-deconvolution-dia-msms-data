@@ -382,13 +382,9 @@ class Unet1D(Module):
         self.final_conv = nn.Conv1d(init_dim, self.out_dim, 1)
 
     def forward(self, x, x_cond, time):
-        if x.shape[1] < x.shape[2]:
-            x = rearrange(x, 'b n c -> b c n')
-
+        x = rearrange(x, 'b c n -> c b n')
         x = self.init_conv(x)
-
         r = x.clone()
-
         t = self.time_mlp(time)
 
         h = []
@@ -403,12 +399,12 @@ class Unet1D(Module):
 
             x = downsample(x)
 
-        _, c, n = x.shape
-        x = rearrange(x, 'b c n -> 1 (c n) b', c = c, n = n)
+        c, _, n = x.shape
+        x = rearrange(x, 'c b n -> 1 (b n) c', c = c, n = n)
         x = self.mid_block1(x, t[0].unsqueeze(0))
         x = self.mid_attn(x, cond = x_cond if self.has_condition else None)
         x = self.mid_block2(x, t[0].unsqueeze(0))
-        x = rearrange(x, '1 (c n) b -> b c n', c = c, n = n)
+        x = rearrange(x, '1 (b n) c -> c b n', c = c, n = n)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim = 1)
@@ -423,4 +419,6 @@ class Unet1D(Module):
         x = torch.cat((x, r), dim = 1)
 
         x = self.final_res_block(x, t)
-        return self.final_conv(x)
+        x = self.final_conv(x)
+        x = rearrange(x, 'c b n -> b c n')
+        return x
