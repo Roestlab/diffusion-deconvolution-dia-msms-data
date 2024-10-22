@@ -2,6 +2,7 @@ import click
 from .utils.data_loader import DIAMSDataset
 from .model.building_blocks import CustomTransformer
 from .model.model import DDIMDiffusionModel
+from .model.unet1d import Unet1D
 from torch.utils.data import DataLoader
 import torch
 import wandb
@@ -9,6 +10,7 @@ import wandb
 @click.group()
 def cli():
     pass
+
 
 @cli.command()
 @click.option('--epochs', default=1000, help='Number of epochs to train')
@@ -18,6 +20,11 @@ def cli():
 @click.option('--hidden-dim', default=1024, help='Hidden dimension for the model')
 @click.option('--num-heads', default=8, help='Number of attention heads')
 @click.option('--num-layers', default=8, help='Number of transformer layers')
+@click.option('--num-timesteps', default=1000, help='Number of timesteps for diffusion model')
+@click.option('--beta-start', default=0.001, help='Start value for beta scheduler')
+@click.option('--beta-end', default=0.00125, help='End value for beta scheduler')
+@click.option("--use-model", default="CustomTransformer", help="Model class to use. (CustomTransformer, Unet1D)")
+# Data settings
 @click.option('--normalize', default=None, help='Normalization method. (None, minmax)')
 @click.option('--ms2-data-path', default='bigdata/ms2_data_cat_int32.npy', help='Path to MS2 data')
 @click.option('--ms1-data-path', default='bigdata/ms1_data_int32.npy', help='Path to MS1 data')
@@ -32,7 +39,32 @@ def cli():
 @click.option('--wandb-architecture', default='DDIM(CustomTransformer)', help='Weigths & Biases model architecture name')
 @click.option('--wandb-dataset', default='Josh_GPF_DIA', help='Weigths & Biases dataset name')
 @click.option('--wandb-mode', default='offline', help='Weigths & Biases mode. (offline, online). Default is offline, which means metrics are only saved locally. You will need to run wandb sync to upload the metrics to the cloud.')
-def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_heads, num_layers, normalize, ms2_data_path, ms1_data_path, checkpoint_path, use_wandb, threads, wandb_project, wandb_name, wandb_id, wandb_resume, wandb_architecture, wandb_dataset, wandb_mode):
+def train(
+    epochs,
+    warmup_epochs,
+    batch_size,
+    learning_rate,
+    hidden_dim,
+    num_heads,
+    num_layers,
+    num_timesteps,
+    beta_start,
+    beta_end,
+    use_model,
+    normalize,
+    ms2_data_path,
+    ms1_data_path,
+    checkpoint_path,
+    use_wandb,
+    threads,
+    wandb_project,
+    wandb_name,
+    wandb_id,
+    wandb_resume,
+    wandb_architecture,
+    wandb_dataset,
+    wandb_mode,
+):
     """
     Train a DDIM model on the DIAMS dataset.
     """
@@ -49,8 +81,16 @@ def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_head
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
-    diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=1000, device=device)
+    if use_model == "Unet1D":
+        model = Unet1D(
+            dim=40000,
+            has_condition=True
+        ).to(device)
+    elif use_model == "CustomTransformer":
+        model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
+    else:
+        raise ValueError(f"Invalid model class: {use_model}")
+    diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=num_timesteps, beta_start=beta_start, beta_end=beta_end, device=device)
 
     if use_wandb:
         wandb.init(
@@ -64,9 +104,8 @@ def train(epochs, warmup_epochs, batch_size, learning_rate, hidden_dim, num_head
                 "dataset": wandb_dataset,
                 "epochs": epochs,
                 "batch_size": batch_size,
-                "hidden_dim": hidden_dim,
-                "num_heads": num_heads,
-                "num_layers": num_layers,
+                "model": use_model,
+                "model_params": vars(model),
             },
             settings=wandb.Settings(start_method="fork"),
             mode=wandb_mode,
