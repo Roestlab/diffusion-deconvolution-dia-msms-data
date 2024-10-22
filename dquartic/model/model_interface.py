@@ -373,8 +373,9 @@ class ModelInterface(object):
                     best_epoch = epoch + 1
                     self.save_checkpoint(None, epoch, best_loss, checkpoint_path)
 
-                    if use_wandb:
-                        self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=500, eta=0.0)
+                    # Only log predictions if using wandb and for the firt epoch and then only after epoch 15 every 500 epochs if the loss is still the best
+                    if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 500 == 0)):
+                        self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=[100, 500, 1000], eta=0.0)
 
                 continue_training = self.callback_handler.epoch_callback(
                     epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -442,18 +443,10 @@ class ModelInterface(object):
         dataloader,
         sample_idx=None,
         mixture_weights=(0.5, 0.75),
-        num_steps=100,
+        num_steps=[100, 500, 1000],
         eta=0.0,
     ):
         """Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2."""
-        # Get sample and prediction
-        ms2_target_plot, ms1_plot, ms2_input_plot, pred_plot = self.plot_single_prediction(
-            dataloader,
-            sample_idx=sample_idx,
-            mixture_weights=mixture_weights,
-            num_steps=num_steps,
-            eta=eta,
-        )
         # Create a wandb Table to log
         table = wandb.Table(
             columns=[
@@ -466,15 +459,26 @@ class ModelInterface(object):
                 "Predicted MS2",
             ]
         )
-        table.add_data(
-            num_steps,
-            epoch,
-            loss,
-            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))),
-            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
-            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
-            wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
-        )
+        
+        for _num_steps in num_steps:
+            # Get sample and prediction
+            ms2_target_plot, ms1_plot, ms2_input_plot, pred_plot = self.plot_single_prediction(
+                dataloader,
+                sample_idx=sample_idx,
+                mixture_weights=mixture_weights,
+                num_steps=_num_steps,
+                eta=eta,
+            )
+            
+            table.add_data(
+                _num_steps,
+                epoch,
+                loss,
+                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))),
+                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
+                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
+                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
+            )
         wandb.log({"predictions_table": table}, commit=False)
 
     def plot_single_prediction(
