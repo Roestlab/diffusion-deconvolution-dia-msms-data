@@ -308,7 +308,7 @@ class ModelInterface(object):
                 best_epoch = epoch + 1
                 self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
                 if use_wandb:
-                    self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=500, eta=0.0)
+                    self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=[100, 500, 1000], eta=0.0)
 
             continue_training = self.callback_handler.epoch_callback(
                 epoch=epoch, epoch_loss=np.mean(batch_loss)
