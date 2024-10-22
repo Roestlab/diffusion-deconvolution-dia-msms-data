@@ -19,6 +19,8 @@ wandb = "0.18.0"
 matplotlib = "^3.4.0"
 tqdm = "^4.62.0"
 numpy = "^1.21.0"
+einops = "^0.8.0"
+rotary_embedding_torch = "^0.8.4"
 
 
 [tool.poetry.dev-dependencies]
