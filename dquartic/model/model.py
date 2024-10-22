@@ -11,7 +11,7 @@ from .building_blocks import get_beta_schedule, get_alpha, get_alpha_bar
 
 
 class DDIMDiffusionModel(ModelInterface):
-    def __init__(self, model_class, num_timesteps=1000, device="cuda", **kwargs):
+    def __init__(self, model_class, num_timesteps=1000, beta_start=0.001, beta_end=0.00125, device="cuda", **kwargs):
         super().__init__()
         self.model = None
         self.build(model_class, **kwargs)
@@ -19,7 +19,7 @@ class DDIMDiffusionModel(ModelInterface):
         self.device = device
 
         # Define beta schedule and compute alpha and alpha_bar
-        self.beta = get_beta_schedule(num_timesteps).to(device)
+        self.beta = get_beta_schedule(num_timesteps, beta_start, beta_end).to(device)
         self.alpha = get_alpha(self.beta)
         self.alpha_bar = get_alpha_bar(self.alpha)
 
