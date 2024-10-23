@@ -82,12 +82,24 @@ def train(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if use_model == "Unet1D":
+        model_init = {
+            "dim": 4,
+            "dim_mults": (1, 2, 2, 3, 3, 4, 4),
+            "cond_channels": 1,
+            "cond_init_dim": 4,
+            "has_condition": True
+        }
         model = Unet1D(
-            dim=40000,
-            has_condition=True
+            **model_init
         ).to(device)
     elif use_model == "CustomTransformer":
-        model = CustomTransformer(input_dim=40000, hidden_dim=hidden_dim, num_heads=num_heads, num_layers=num_layers).to(device)
+        model_init = {
+            "input_dim": 40000,
+            "hidden_dim": hidden_dim,
+            "num_heads": num_heads,
+            "num_layers": num_layers
+        }
+        model = CustomTransformer(**model_init).to(device)
     else:
         raise ValueError(f"Invalid model class: {use_model}")
     diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=num_timesteps, beta_start=beta_start, beta_end=beta_end, device=device)
@@ -106,6 +118,7 @@ def train(
                 "batch_size": batch_size,
                 "model": use_model,
                 "model_params": vars(model),
+                **model_init
             },
             settings=wandb.Settings(start_method="fork"),
             mode=wandb_mode,
