@@ -438,7 +438,7 @@ class Unet1D(Module):
         x = self.init_conv(x)
         r = x.clone()
         t = self.time_mlp(time)
-        c = (
+        cs = (
             self.cond_proj(rearrange(x_cond, "b n -> b () n") if len(x_cond.shape) == 2 else x_cond)
             if self.has_condition
             else None
@@ -458,9 +458,9 @@ class Unet1D(Module):
 
         c, _, n = x.shape
         x = rearrange(x, "c b n -> 1 (b n) c", c=c, n=n)
-        x = self.mid_block1(x, t[0].unsqueeze(0))
-        x = self.mid_attn(x, cond=c)
-        x = self.mid_block2(x, t[0].unsqueeze(0))
+        x = self.mid_block1(x, t)
+        x = self.mid_attn(x, cond=cs)
+        x = self.mid_block2(x, t)
         x = rearrange(x, "1 (b n) c -> c b n", c=c, n=n)
 
         for block1, block2, attn, upsample in self.ups:
