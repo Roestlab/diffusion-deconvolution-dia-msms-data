@@ -430,7 +430,7 @@ class ModelInterface(object):
             # Simulated mixed spectra from target sample and other sample
             x_start_rand = (ms2_1*mixture_weights[0]) + (ms2_2*mixture_weights[1])
             x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
-            pred = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
+            pred, _ = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
             # Store ms2_1, ms1_1, x_start_rand, pred
             pred_data = {'ms2_1': ms2_1, 'ms1_1': ms1_1, 'x_start_rand': x_start_rand.cpu().detach().numpy(), 'pred': pred}
             preds = np.append(preds, pred_data)
@@ -462,7 +462,7 @@ class ModelInterface(object):
         
         for _num_steps in num_steps:
             # Get sample and prediction
-            ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_plot = self.plot_single_prediction(
+            ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_noise_plot, pred_plot = self.plot_single_prediction(
                 dataloader,
                 sample_idx=sample_idx,
                 mixture_weights=mixture_weights,
@@ -478,6 +478,7 @@ class ModelInterface(object):
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
+                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
             )
         wandb.log({"predictions_table": table}, commit=False)
@@ -525,7 +526,24 @@ class ModelInterface(object):
         x_start_rand = (ms2_1*mixture_weights[0]) + (ms2_2*mixture_weights[1])
         x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
             
-        pred = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
+        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
+
+        pred_noise_df = self._ms2_mesh_to_df(pred_noise)
+        pred_noise_plot = pred_noise_df.plot(
+            x="y",
+            y="x",
+            z="intensity",
+            title="Predicted Noise MS2",
+            kind=plot_type,
+            xlabel="RT Index",
+            ylabel="m/z Index",
+            height=500,
+            width=800,
+            plot_3d=plot_3d,
+            grid=False,
+            show_plot=False,
+            backend=backend,
+        )
 
         pred_df = self._ms2_mesh_to_df(pred)
         pred_plot = pred_df.plot(
@@ -534,8 +552,8 @@ class ModelInterface(object):
             z="intensity",
             title="Predicted MS2",
             kind=plot_type,
-            xlabel="X Index",
-            ylabel="Y Index",
+            xlabel="RT Index",
+            ylabel="m/z Index",
             height=500,
             width=800,
             plot_3d=plot_3d,
@@ -610,7 +628,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        return ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_plot
+        return ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_noise_plot, pred_plot
 
     ###################
     # Private Methods #
@@ -686,8 +704,8 @@ class ModelInterface(object):
         """Predict one batch"""
         self.model.eval()
         with torch.no_grad():
-            sample = self.sample(x_start, x_cond, num_steps=num_steps, eta=eta)
-        return sample[0].cpu().detach().numpy()
+            sample, pred_noise = self.sample(x_start, x_cond, num_steps=num_steps, eta=eta)
+        return sample[0].cpu().detach().numpy(), pred_noise[0].cpu().detach().numpy()
 
     @staticmethod            
     def _ms2_mesh_to_df(arr):

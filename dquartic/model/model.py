@@ -78,21 +78,22 @@ class DDIMDiffusionModel(ModelInterface):
         else:
             x_t_prev = x0_pred
 
-        return x_t_prev
+        return x_t_prev, eps_pred
 
     def sample(self, x, x_cond, num_steps=1000, eta=0.0):
         """
         Generate samples from the model.
         """
         x_t = x
+        pred_noise = None
 
         time_steps = torch.linspace(self.num_timesteps - 1, 0, num_steps, dtype=torch.long)
 
         for t in time_steps:
             t = t.long()
-            x_t = self.p_sample(x_t, x_cond, t.item(), eta)
+            x_t, pred_noise = self.p_sample(x_t, x_cond, t.item(), eta)
 
-        return x_t
+        return x_t, pred_noise
 
     def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
         """
