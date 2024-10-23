@@ -23,6 +23,7 @@ def cli():
 @click.option('--num-timesteps', default=1000, help='Number of timesteps for diffusion model')
 @click.option('--beta-start', default=0.001, help='Start value for beta scheduler')
 @click.option('--beta-end', default=0.00125, help='End value for beta scheduler')
+@click.option('--ms1-loss-weight', default=0.0, help='Weight for MS1 loss')
 @click.option("--use-model", default="CustomTransformer", help="Model class to use. (CustomTransformer, Unet1D)")
 # Data settings
 @click.option('--normalize', default=None, help='Normalization method. (None, minmax)')
@@ -50,6 +51,7 @@ def train(
     num_timesteps,
     beta_start,
     beta_end,
+    ms1_loss_weight,
     use_model,
     normalize,
     ms2_data_path,
@@ -102,7 +104,7 @@ def train(
         model = CustomTransformer(**model_init).to(device)
     else:
         raise ValueError(f"Invalid model class: {use_model}")
-    diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=num_timesteps, beta_start=beta_start, beta_end=beta_end, device=device)
+    diffusion_model = DDIMDiffusionModel(model_class=model, num_timesteps=num_timesteps, beta_start=beta_start, beta_end=beta_end, ms1_loss_weight=ms1_loss_weight, device=device)
 
     if use_wandb:
         wandb.init(
@@ -116,6 +118,9 @@ def train(
                 "dataset": wandb_dataset,
                 "epochs": epochs,
                 "batch_size": batch_size,
+                "beta_start": beta_start,
+                "beta_end": beta_end,
+                "ms1_loss_weight": ms1_loss_weight,
                 "model": use_model,
                 "model_params": vars(model),
                 **model_init
