@@ -80,7 +80,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t_prev
 
-    def sample(self, x, x_cond, num_steps=50, eta=0.0):
+    def sample(self, x, x_cond, num_steps=1000, eta=0.0):
         """
         Generate samples from the model.
         """

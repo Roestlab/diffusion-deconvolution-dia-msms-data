@@ -485,8 +485,8 @@ class ModelInterface(object):
         self,
         dataloader,
         sample_idx=None,
-        mixture_weights=(0.5, 0.75),
-        num_steps=100,
+        mixture_weights=(0.5, 0.5),
+        num_steps=1000,
         eta=0.0,
         plot_type="peakmap",
         plot_3d=True,
@@ -664,7 +664,7 @@ class ModelInterface(object):
         self.optimizer.step()
         return loss.item()
 
-    def _predict_one_batch(self, x_start, x_cond, num_steps=100, eta=0.0):
+    def _predict_one_batch(self, x_start, x_cond, num_steps=1000, eta=0.0):
         """Predict one batch"""
         self.model.eval()
         with torch.no_grad():
