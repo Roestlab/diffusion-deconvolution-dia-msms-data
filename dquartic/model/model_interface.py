@@ -420,7 +420,7 @@ class ModelInterface(object):
             'best_loss': best_loss,
         }, checkpoint_path)
 
-    def predict(self, dataloader, mixture_weights=(0.5, 0.75), num_steps=100, eta=0.0):
+    def predict(self, dataloader, mixture_weights=(0.5, 0.5), num_steps=100, eta=0.0):
         self.model.eval()
         preds = np.array([])
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
@@ -442,7 +442,7 @@ class ModelInterface(object):
         loss,
         dataloader,
         sample_idx=None,
-        mixture_weights=(0.5, 0.75),
+        mixture_weights=(0.5, 0.5),
         num_steps=[100, 500, 1000],
         eta=0.0,
     ):
