@@ -12,6 +12,7 @@ class DDIMDiffusionModel(ModelInterface):
         num_timesteps=1000,
         beta_start=0.001,
         beta_end=0.00125,
+        ms1_loss_weight=0.0,
         device="cuda",
         **kwargs,
     ):
@@ -25,6 +26,7 @@ class DDIMDiffusionModel(ModelInterface):
         self.beta = get_beta_schedule(num_timesteps, beta_start, beta_end).to(device)
         self.alpha = get_alpha(self.beta)
         self.alpha_bar = get_alpha_bar(self.alpha)
+        self.ms1_loss_weight = ms1_loss_weight
 
     def q_sample(self, x_start, t, noise=None):
         """

@@ -239,7 +239,7 @@ class ModelInterface(object):
         """
         return np.sum([p.numel() for p in self.model.parameters()])
 
-    def train_step(self, x_start, x_cond, noise=None):
+    def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step. Implemented in the subclass.
         """
@@ -645,7 +645,7 @@ class ModelInterface(object):
         for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
             x_start, x_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             x_noise = ms2_2.to(self.device)
-            loss = self._train_one_batch(x_start, x_cond, x_noise)
+            loss = self._train_one_batch(x_start, x_cond, x_noise, self.ms1_loss_weight)
             batch_loss.append(loss)
 
             if self.use_wandb:
@@ -655,10 +655,10 @@ class ModelInterface(object):
 
         return batch_loss
 
-    def _train_one_batch(self, x_start, x_cond, x_noise):
+    def _train_one_batch(self, x_start, x_cond, x_noise, ms1_loss_weight):
         """Train one batch"""
         self.optimizer.zero_grad()
-        loss = self.train_step(x_start, x_cond, noise=x_noise)
+        loss = self.train_step(x_start, x_cond, noise=x_noise, ms1_loss_weight=ms1_loss_weight)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
