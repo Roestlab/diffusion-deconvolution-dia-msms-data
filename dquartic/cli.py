@@ -86,6 +86,7 @@ def train(
     if use_model == "Unet1D":
         model_init = {
             "dim": 4,
+            "channels" : 1,
             "dim_mults": (1, 2, 2, 3, 3, 4, 4),
             "cond_channels": 1,
             "cond_init_dim": 4,
