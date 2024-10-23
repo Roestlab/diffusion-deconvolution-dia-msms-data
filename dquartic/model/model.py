@@ -108,9 +108,10 @@ class DDIMDiffusionModel(ModelInterface):
         eps_pred = self.model(x_t, x_cond, t)
 
         if ms1_loss_weight > 0.0:
+            tic = torch.sum(x_t - eps_pred, dim=-1)
             loss = (1 - ms1_loss_weight) * F.mse_loss(
                 eps_pred, noise * noise_mult
-            ) + ms1_loss_weight * F.mse_loss(torch.sum(x_t - eps_pred, dim=-1), x_cond)
+            ) + ms1_loss_weight * F.mse_loss(tic / torch.max(tic), x_cond)
         else:
             loss = F.mse_loss(eps_pred, noise * noise_mult)
         return loss
