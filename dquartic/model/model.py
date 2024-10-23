@@ -1,17 +1,20 @@
-import sys
-
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-
-import wandb
 
 from .model_interface import ModelInterface
 from .building_blocks import get_beta_schedule, get_alpha, get_alpha_bar
 
 
 class DDIMDiffusionModel(ModelInterface):
-    def __init__(self, model_class, num_timesteps=1000, beta_start=0.001, beta_end=0.00125, device="cuda", **kwargs):
+    def __init__(
+        self,
+        model_class,
+        num_timesteps=1000,
+        beta_start=0.001,
+        beta_end=0.00125,
+        device="cuda",
+        **kwargs,
+    ):
         super().__init__()
         self.model = None
         self.build(model_class, **kwargs)
@@ -33,7 +36,10 @@ class DDIMDiffusionModel(ModelInterface):
         sqrt_alpha_bar_t = torch.sqrt(self.alpha_bar[t])[:, None, None]
         sqrt_one_minus_alpha_bar_t = torch.sqrt(1 - self.alpha_bar[t])[:, None, None]
 
-        return sqrt_alpha_bar_t * x_start + sqrt_one_minus_alpha_bar_t * noise
+        return (
+            sqrt_alpha_bar_t * x_start + sqrt_one_minus_alpha_bar_t * noise,
+            sqrt_one_minus_alpha_bar_t,
+        )
 
     def p_sample(self, x_t, x_cond, t, eta=0.0):
         """
@@ -46,7 +52,6 @@ class DDIMDiffusionModel(ModelInterface):
         eps_pred = self.model(x_t, x_cond, t_tensor)
 
         # Compute x_{t-1}
-        alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
         sqrt_alpha_bar_t = torch.sqrt(alpha_bar_t)
         sqrt_one_minus_alpha_bar_t = torch.sqrt(1 - alpha_bar_t)
@@ -87,7 +92,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t
 
-    def train_step(self, x_start, x_cond, noise=None):
+    def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step.
         """
@@ -95,10 +100,15 @@ class DDIMDiffusionModel(ModelInterface):
         t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
 
         noise = torch.randn_like(x_start) if noise is None else noise
-        x_t = self.q_sample(x_start, t, noise)
+        x_t, noise_mult = self.q_sample(x_start, t, noise)
 
         # Predict noise
         eps_pred = self.model(x_t, x_cond, t)
 
-        loss = F.mse_loss(eps_pred, noise)
+        if ms1_loss_weight > 0.0:
+            loss = (1 - ms1_loss_weight) * F.mse_loss(
+                eps_pred, noise * noise_mult
+            ) + ms1_loss_weight * F.mse_loss(torch.sum(x_t - eps_pred, dim=-1), x_cond)
+        else:
+            loss = F.mse_loss(eps_pred, noise * noise_mult)
         return loss

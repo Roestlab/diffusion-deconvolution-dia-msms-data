@@ -658,7 +658,7 @@ class ModelInterface(object):
     def _train_one_batch(self, x_start, x_cond, x_noise):
         """Train one batch"""
         self.optimizer.zero_grad()
-        loss = self.train_step(x_start, x_cond, x_noise)
+        loss = self.train_step(x_start, x_cond, noise=x_noise)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
