@@ -462,7 +462,7 @@ class ModelInterface(object):
         
         for _num_steps in num_steps:
             # Get sample and prediction
-            ms2_target_plot, ms1_plot, ms2_input_plot, pred_plot = self.plot_single_prediction(
+            ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_plot = self.plot_single_prediction(
                 dataloader,
                 sample_idx=sample_idx,
                 mixture_weights=mixture_weights,
@@ -476,6 +476,7 @@ class ModelInterface(object):
                 loss,
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
+                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
             )
@@ -560,12 +561,29 @@ class ModelInterface(object):
             backend=backend,
         )
 
+        ms2_noise_mesh_df = self._ms2_mesh_to_df(ms2_2)
+        ms2_noise_plot = ms2_noise_mesh_df.plot(
+            x="y",
+            y="x",
+            z="intensity",
+            title="Noise MS2",
+            kind=plot_type,
+            xlabel="RT Index",
+            ylabel="m/z Index",
+            height=500,
+            width=800,
+            plot_3d=plot_3d,
+            grid=False,
+            show_plot=False,
+            backend=backend,
+        )
+
         ms2_input_mesh_df = self._ms2_mesh_to_df(x_start_rand.cpu().detach().numpy().squeeze(0))
         ms2_input_plot = ms2_input_mesh_df.plot(
             x="y",
             y="x",
             z="intensity",
-            title="Random Noise MS2 Input",
+            title="Noised MS2 Input",
             kind=plot_type,
             xlabel="RT Index",
             ylabel="m/z Index",
@@ -592,7 +610,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        return ms2_target_plot, ms1_plot, ms2_input_plot, pred_plot
+        return ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_plot
 
     ###################
     # Private Methods #
