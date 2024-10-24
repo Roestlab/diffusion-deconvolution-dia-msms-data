@@ -455,7 +455,9 @@ class ModelInterface(object):
                 "Loss",
                 "Target MS2",
                 "Target MS1",
-                "Noise MS2 Input",
+                "Noise MS2",
+                "Simulated Noise MS2 Input",
+                "Predicted MS2 Noise",
                 "Predicted MS2",
             ]
         )
