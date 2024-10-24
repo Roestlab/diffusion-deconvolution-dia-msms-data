@@ -334,7 +334,8 @@ class Unet1D(Module):
         sinusoidal_pos_emb_theta=10000,
         attn_dim_head=8,
         attn_heads=2,
-        attn_downsampled_l=625,
+        downsampled_n=625,
+        pos_output_only=False,
     ):
         super().__init__()
 
@@ -394,12 +395,12 @@ class Unet1D(Module):
             )
 
         mid_dim = dims[-1]
-        self.mid_block1 = resnet_block(mid_dim * attn_downsampled_l, mid_dim * attn_downsampled_l)
+        self.mid_block1 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
         self.mid_attn = Residual(
             PreNorm(
-                mid_dim * attn_downsampled_l,
+                mid_dim * downsampled_n,
                 Attention(
-                    mid_dim * attn_downsampled_l,
+                    mid_dim * downsampled_n,
                     dim_head=attn_dim_head,
                     heads=attn_heads,
                     use_xattn=self.has_condition,
@@ -407,7 +408,7 @@ class Unet1D(Module):
                 ),
             )
         )
-        self.mid_block2 = resnet_block(mid_dim * attn_downsampled_l, mid_dim * attn_downsampled_l)
+        self.mid_block2 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
             is_last = ind == (len(in_out) - 1)
@@ -432,6 +433,8 @@ class Unet1D(Module):
 
         self.final_res_block = resnet_block(init_dim * 2, init_dim)
         self.final_conv = nn.Conv1d(init_dim, self.out_dim, 1)
+
+        self.final_act = nn.Softplus() if pos_output_only else nn.Identity()
 
     def forward(self, x, x_cond, time):
         x = rearrange(x, "b c n -> c b n")
@@ -478,4 +481,4 @@ class Unet1D(Module):
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
         x = rearrange(x, "c b n -> b c n")
-        return x
+        return self.final_act(x)

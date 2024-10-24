@@ -10,6 +10,7 @@ import wandb
 from io import BytesIO
 from PIL import Image as PILImage
 
+
 class LR_SchedulerInterface(object):
     def __init__(self, optimizer: torch.optim.Optimizer, **kwargs):
         raise NotImplementedError
@@ -98,9 +99,7 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
         progress = float(current_step - num_warmup_steps) / float(
             max(1, num_training_steps - num_warmup_steps)
         )
-        return max(
-            1e-10, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress))
-        )
+        return max(1e-10, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress)))
 
     def get_cosine_schedule_with_warmup(
         self,
@@ -245,7 +244,7 @@ class ModelInterface(object):
         """
         raise NotImplementedError
 
-    def sample(self, x_start, x_cond, num_steps=100, eta=0.0):
+    def sample(self, x_start, x_cond, num_steps=1000, pred_type="eps"):
         """
         Generate samples from the model. Implemented in the subclass.
         """
@@ -258,7 +257,7 @@ class ModelInterface(object):
         num_warmup_steps=5,
         learning_rate=1e-4,
         use_wandb=True,
-        checkpoint_path="best_model.ckpt"
+        checkpoint_path="best_model.ckpt",
     ):
         """
         Train the model according to specifications. Includes a warumup
@@ -273,7 +272,11 @@ class ModelInterface(object):
         self.model.train()
 
         # Load checkpoint if available
-        start_epoch, best_loss, lr_scheduler = self.load_checkpoint(lr_scheduler, f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt", self.device)
+        start_epoch, best_loss, lr_scheduler = self.load_checkpoint(
+            lr_scheduler,
+            f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt",
+            self.device,
+        )
 
         best_epoch = start_epoch
 
@@ -298,17 +301,30 @@ class ModelInterface(object):
                     }
                 )
 
-            print(f"[Training] Epoch={epoch+1}, lr={lr_scheduler.get_last_lr()[0]}, loss={np.mean(batch_loss)}")
-            
-            self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt")             
-            
+            print(
+                f"[Training] Epoch={epoch+1}, lr={lr_scheduler.get_last_lr()[0]}, loss={np.mean(batch_loss)}"
+            )
+
+            self.save_checkpoint(
+                None,
+                epoch,
+                np.mean(batch_loss),
+                f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt",
+            )
+
             # Check if this is the best loss so far
             if avg_train_loss < best_loss:
                 best_loss = avg_train_loss
                 best_epoch = epoch + 1
                 self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
                 if use_wandb:
-                    self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=[100, 500, 1000], eta=0.0)
+                    self.log_single_prediction(
+                        best_epoch,
+                        best_loss,
+                        dataloader,
+                        num_steps=[100, 500, 1000],
+                        pred_type="eps",
+                    )
 
             continue_training = self.callback_handler.epoch_callback(
                 epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -327,7 +343,7 @@ class ModelInterface(object):
         learning_rate: float = 1e-4,
         use_wandb: bool = False,
         checkpoint_path: str = "best_model.ckpt",
-         **kwargs,
+        **kwargs,
     ):
         """
         Train the model with the given dataloader for the given number of epochs.
@@ -340,13 +356,17 @@ class ModelInterface(object):
                 learning_rate=learning_rate,
                 use_wandb=use_wandb,
                 checkpoint_path=checkpoint_path,
-                 **kwargs,
-            ) 
+                **kwargs,
+            )
         else:
             self._prepare_training(learning_rate, **kwargs)
 
             # Load checkpoint if available
-            start_epoch, best_loss, _ = self.load_checkpoint(None, f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt", self.device)
+            start_epoch, best_loss, _ = self.load_checkpoint(
+                None,
+                f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt",
+                self.device,
+            )
 
             best_epoch = start_epoch
 
@@ -364,10 +384,17 @@ class ModelInterface(object):
                         }
                     )
 
-                print(f"[Training] Epoch={epoch+1}, lr={self.optimizer.param_groups[0]['lr']}, loss={np.mean(batch_loss)}")
-                
-                self.save_checkpoint(None, epoch, np.mean(batch_loss), f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt")
-                
+                print(
+                    f"[Training] Epoch={epoch+1}, lr={self.optimizer.param_groups[0]['lr']}, loss={np.mean(batch_loss)}"
+                )
+
+                self.save_checkpoint(
+                    None,
+                    epoch,
+                    np.mean(batch_loss),
+                    f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt",
+                )
+
                 if np.mean(batch_loss) < best_loss:
                     best_loss = np.mean(batch_loss)
                     best_epoch = epoch + 1
@@ -375,7 +402,13 @@ class ModelInterface(object):
 
                     # Only log predictions if using wandb and for the firt epoch and then only after epoch 15 every 500 epochs if the loss is still the best
                     if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 500 == 0)):
-                        self.log_single_prediction(best_epoch, best_loss, dataloader, num_steps=[100, 500, 1000], eta=0.0)
+                        self.log_single_prediction(
+                            best_epoch,
+                            best_loss,
+                            dataloader,
+                            num_steps=[100, 500, 1000],
+                            pred_type="eps",
+                        )
 
                 continue_training = self.callback_handler.epoch_callback(
                     epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -392,18 +425,18 @@ class ModelInterface(object):
         if os.path.exists(checkpoint_path):
             print(f"Loading checkpoint from {checkpoint_path}...")
             checkpoint = torch.load(checkpoint_path, map_location=device)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.model.load_state_dict(checkpoint["model_state_dict"])
             if self.optimizer is not None:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             if scheduler is not None:
-                scheduler.lambda_lr.load_state_dict(checkpoint['scheduler_state_dict'])
-            epoch = checkpoint['epoch']
-            best_loss = checkpoint['best_loss']
+                scheduler.lambda_lr.load_state_dict(checkpoint["scheduler_state_dict"])
+            epoch = checkpoint["epoch"]
+            best_loss = checkpoint["best_loss"]
             print(f"Resumed from ({checkpoint_path}) epoch {epoch}, best loss {best_loss:.6f}")
         else:
             print(f"No checkpoint ({checkpoint_path}) found. Starting from scratch.")
             epoch = 0
-            best_loss = float('inf')
+            best_loss = float("inf")
             scheduler = scheduler
 
         return epoch, best_loss, scheduler
@@ -412,27 +445,37 @@ class ModelInterface(object):
         """
         Save the current state of the model, optimizer, and scheduler to a checkpoint file.
         """
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.lambda_lr.state_dict() if scheduler is not None else None,
-            'best_loss': best_loss,
-        }, checkpoint_path)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "scheduler_state_dict": (
+                    scheduler.lambda_lr.state_dict() if scheduler is not None else None
+                ),
+                "best_loss": best_loss,
+            },
+            checkpoint_path,
+        )
 
-    def predict(self, dataloader, mixture_weights=(0.5, 0.5), num_steps=100, eta=0.0):
+    def predict(self, dataloader, mixture_weights=(0.5, 0.5), num_steps=1000, pred_type="eps"):
         self.model.eval()
         preds = np.array([])
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
-            x_start, x_cond = ms2_1, ms1_1  
+            x_start, x_cond = ms2_1, ms1_1
             x_start = x_start.to(self.device)
             x_cond = x_cond.to(self.device)
             # Simulated mixed spectra from target sample and other sample
-            x_start_rand = (ms2_1*mixture_weights[0]) + (ms2_2*mixture_weights[1])
+            x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
             x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
-            pred, _ = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
+            pred, _ = self._predict_one_batch(x_start_rand, x_cond, num_steps, pred_type)
             # Store ms2_1, ms1_1, x_start_rand, pred
-            pred_data = {'ms2_1': ms2_1, 'ms1_1': ms1_1, 'x_start_rand': x_start_rand.cpu().detach().numpy(), 'pred': pred}
+            pred_data = {
+                "ms2_1": ms2_1,
+                "ms1_1": ms1_1,
+                "x_start_rand": x_start_rand.cpu().detach().numpy(),
+                "pred": pred,
+            }
             preds = np.append(preds, pred_data)
         return preds
 
@@ -444,7 +487,7 @@ class ModelInterface(object):
         sample_idx=None,
         mixture_weights=(0.5, 0.5),
         num_steps=[100, 500, 1000],
-        eta=0.0,
+        pred_type="eps",
     ):
         """Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2."""
         # Create a wandb Table to log
@@ -459,26 +502,37 @@ class ModelInterface(object):
                 "Predicted MS2",
             ]
         )
-        
+
         for _num_steps in num_steps:
             # Get sample and prediction
-            ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_noise_plot, pred_plot = self.plot_single_prediction(
+            (
+                ms2_target_plot,
+                ms1_plot,
+                ms2_noise_plot,
+                ms2_input_plot,
+                pred_noise_plot,
+                pred_plot,
+            ) = self.plot_single_prediction(
                 dataloader,
                 sample_idx=sample_idx,
                 mixture_weights=mixture_weights,
                 num_steps=_num_steps,
-                eta=eta,
+                pred_type=pred_type,
             )
-            
+
             table.add_data(
                 _num_steps,
                 epoch,
                 loss,
-                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))),
+                wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))
+                ),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig))),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
-                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig))),
+                wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig))
+                ),
                 wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
             )
         wandb.log({"predictions_table": table}, commit=False)
@@ -489,7 +543,7 @@ class ModelInterface(object):
         sample_idx=None,
         mixture_weights=(0.5, 0.5),
         num_steps=1000,
-        eta=0.0,
+        pred_type="eps",
         plot_type="peakmap",
         plot_3d=True,
         backend="ms_matplotlib",
@@ -502,7 +556,7 @@ class ModelInterface(object):
             sample_idx (int, optional): The index of the sample to plot. Defaults to None, in which case a random sample is chosen.
             mixture_weights (tuple, optional): The weights for the mixture of the two samples. Defaults to (0.5, 0.75).
             num_steps (int, optional): The number of steps to predict. Defaults to 100.
-            eta (float, optional): The eta value. Defaults to 0.0.
+            pred_type (string, optional): The prediction type. Defaults to "eps".
             plot_type (str, optional): The type of plot. Defaults to 'peakmap'.
             plot_3d (bool, optional): Whether to plot in 3D. Defaults to True.
             backend (str, optional): The backend for plotting. Defaults to 'ms_matplotlib'.
@@ -523,10 +577,10 @@ class ModelInterface(object):
         x_cond = x_cond.to(self.device).unsqueeze(0)
 
         # Simulated mixed spectra from target sample and other sample
-        x_start_rand = (ms2_1*mixture_weights[0]) + (ms2_2*mixture_weights[1])
+        x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
         x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
-            
-        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps, eta)
+
+        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps, pred_type)
 
         pred_noise_df = self._ms2_mesh_to_df(pred_noise)
         pred_noise_plot = pred_noise_df.plot(
@@ -685,9 +739,7 @@ class ModelInterface(object):
             batch_loss.append(loss)
 
             if self.use_wandb:
-                wandb.log(
-                    {"batch/train_loss": loss, "batch": batch_idx + epoch * len(dataloader)}
-                )
+                wandb.log({"batch/train_loss": loss, "batch": batch_idx + epoch * len(dataloader)})
 
         return batch_loss
 
@@ -700,27 +752,25 @@ class ModelInterface(object):
         self.optimizer.step()
         return loss.item()
 
-    def _predict_one_batch(self, x_start, x_cond, num_steps=1000, eta=0.0):
+    def _predict_one_batch(self, x_start, x_cond, num_steps=1000, pred_type="eps"):
         """Predict one batch"""
         self.model.eval()
         with torch.no_grad():
-            sample, pred_noise = self.sample(x_start, x_cond, num_steps=num_steps, eta=eta)
+            sample, pred_noise = self.sample(
+                x_start, x_cond, num_steps=num_steps, pred_type=pred_type
+            )
         return sample[0].cpu().detach().numpy(), pred_noise[0].cpu().detach().numpy()
 
-    @staticmethod            
+    @staticmethod
     def _ms2_mesh_to_df(arr):
         """Convert MS2 mesh to DataFrame for 2D plotting"""
         rows, cols = arr.shape
-        y, x = np.meshgrid(range(rows), range(cols), indexing='ij')
+        y, x = np.meshgrid(range(rows), range(cols), indexing="ij")
         x_flat = x.flatten()
         y_flat = y.flatten()
         intensity_flat = arr.flatten()
 
-        return pd.DataFrame({
-            'x': x_flat,
-            'y': y_flat,
-            'intensity': intensity_flat
-        })
+        return pd.DataFrame({"x": x_flat, "y": y_flat, "intensity": intensity_flat})
 
     @staticmethod
     def _ms2_to_df(batch_ms2):
@@ -729,9 +779,9 @@ class ModelInterface(object):
         for i in range(batch_ms2.shape[0]):
             sample = batch_ms2[i]
             df = pd.DataFrame(sample.numpy())
-            df['sample_id'] = i
-            df = df.melt(id_vars=['sample_id'], var_name='x', value_name='intensity')
-            df['y'] = df.index % 34
+            df["sample_id"] = i
+            df = df.melt(id_vars=["sample_id"], var_name="x", value_name="intensity")
+            df["y"] = df.index % 34
             ms2_df = pd.concat([ms2_df, df], ignore_index=True)
         return ms2_df
 
@@ -742,15 +792,15 @@ class ModelInterface(object):
         for i in range(batch_ms1.shape[0]):
             sample = batch_ms1[i]
             df = pd.DataFrame(sample.numpy().reshape(1, -1))
-            df['sample_id'] = i
-            df = df.melt(id_vars=['sample_id'], var_name='y', value_name='intensity')
+            df["sample_id"] = i
+            df = df.melt(id_vars=["sample_id"], var_name="y", value_name="intensity")
             ms1_df = pd.concat([ms1_df, df], ignore_index=True)
         return ms1_df
-    
+
     @staticmethod
     def _convert_mpl_fig_to_bytes(fig):
         """Convert a matplotlib figure to bytes"""
         buf = BytesIO()
-        fig.savefig(buf, format='png')
+        fig.savefig(buf, format="png")
         buf.seek(0)
         return buf
