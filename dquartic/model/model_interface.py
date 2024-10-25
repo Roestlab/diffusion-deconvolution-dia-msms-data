@@ -703,7 +703,7 @@ class ModelInterface(object):
 
     def _set_optimizer(self, lr):
         """Set optimizer"""
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr)
 
     def _set_lr(self, lr: float):
         """Set learning rate"""
