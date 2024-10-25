@@ -10,10 +10,9 @@
 3) ms2 + ms1 mse loss using best version of 1/2?
 4) Multichannel conditioning signal (repeat 1/2 with new signal?)
 
-- 
+- pseudo extracted spectra?
+ 
 - Optimize inference and data types with [torchao](https://pytorch.org/blog/pytorch-native-architecture-optimization/)
-- Add eval metrics to WandB logging, separate from training
-- continue from checkpoint - Saksham
 - Add a raw mzML/tdf parser (timsrust_py03) - Josh
 - Obtain another dataset for testing - Josh
   - Potentially use HeLa
@@ -33,3 +32,5 @@
 - ~~Add learning rate scheduler (apopt from [AlphaPeptDeep](https://github.com/MannLabs/alphapeptdeep/blob/5cb3d2c8da526e38c6dd94f370409a751da282de/peptdeep/model/model_interface.py#L34-L162)) - Justin~~
 - ~~Update Transformer model - Leon~~
 - ~~Update/Test different loss functions - Leon~~
+- ~~continue from checkpoint - Saksham~~
+- ~~Add eval metrics to WandB logging, separate from training~~
