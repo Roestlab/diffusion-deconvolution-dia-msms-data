@@ -26,6 +26,7 @@ def cli():
 @click.option("--num-timesteps", default=1000, help="Number of timesteps for diffusion model")
 @click.option("--beta-start", default=0.001, help="Start value for beta scheduler")
 @click.option("--beta-end", default=0.00125, help="End value for beta scheduler")
+@click.option("--pred-type", default="eps", help="Prediction type, 'eps' for predicting noise,'x0' for predicting target.")
 @click.option("--ms1-loss-weight", default=0.0, help="Weight for MS1 loss")
 @click.option(
     "--use-model",
@@ -74,6 +75,7 @@ def train(
     num_timesteps,
     beta_start,
     beta_end,
+    pred_type,
     ms1_loss_weight,
     use_model,
     normalize,
@@ -133,6 +135,7 @@ def train(
         num_timesteps=num_timesteps,
         beta_start=beta_start,
         beta_end=beta_end,
+        pred_type=pred_type,
         ms1_loss_weight=ms1_loss_weight,
         device=device,
     )
