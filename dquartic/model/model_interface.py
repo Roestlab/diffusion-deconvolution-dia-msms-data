@@ -244,7 +244,7 @@ class ModelInterface(object):
         """
         raise NotImplementedError
 
-    def sample(self, x_start, x_cond, num_steps=1000, pred_type="eps"):
+    def sample(self, x_start, x_cond, num_steps=1000):
         """
         Generate samples from the model. Implemented in the subclass.
         """
@@ -323,7 +323,6 @@ class ModelInterface(object):
                         best_loss,
                         dataloader,
                         num_steps=[100, 500, 1000],
-                        pred_type="eps",
                     )
 
             continue_training = self.callback_handler.epoch_callback(
@@ -407,7 +406,6 @@ class ModelInterface(object):
                             best_loss,
                             dataloader,
                             num_steps=[100, 500, 1000],
-                            pred_type="eps",
                         )
 
                 continue_training = self.callback_handler.epoch_callback(
@@ -458,7 +456,7 @@ class ModelInterface(object):
             checkpoint_path,
         )
 
-    def predict(self, dataloader, mixture_weights=(0.5, 0.5), num_steps=1000, pred_type="eps"):
+    def predict(self, dataloader, mixture_weights=(0.5, 0.5), num_steps=1000):
         self.model.eval()
         preds = np.array([])
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
@@ -468,7 +466,7 @@ class ModelInterface(object):
             # Simulated mixed spectra from target sample and other sample
             x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
             x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
-            pred, _ = self._predict_one_batch(x_start_rand, x_cond, num_steps, pred_type)
+            pred, _ = self._predict_one_batch(x_start_rand, x_cond, num_steps)
             # Store ms2_1, ms1_1, x_start_rand, pred
             pred_data = {
                 "ms2_1": ms2_1,
@@ -487,7 +485,6 @@ class ModelInterface(object):
         sample_idx=None,
         mixture_weights=(0.5, 0.5),
         num_steps=[100, 500, 1000],
-        pred_type="eps",
     ):
         """Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2."""
         # Create a wandb Table to log
@@ -519,7 +516,6 @@ class ModelInterface(object):
                 sample_idx=sample_idx,
                 mixture_weights=mixture_weights,
                 num_steps=_num_steps,
-                pred_type=pred_type,
             )
 
             table.add_data(
@@ -545,7 +541,6 @@ class ModelInterface(object):
         sample_idx=None,
         mixture_weights=(0.5, 0.5),
         num_steps=1000,
-        pred_type="eps",
         plot_type="peakmap",
         plot_3d=True,
         backend="ms_matplotlib",
@@ -558,7 +553,6 @@ class ModelInterface(object):
             sample_idx (int, optional): The index of the sample to plot. Defaults to None, in which case a random sample is chosen.
             mixture_weights (tuple, optional): The weights for the mixture of the two samples. Defaults to (0.5, 0.75).
             num_steps (int, optional): The number of steps to predict. Defaults to 100.
-            pred_type (string, optional): The prediction type. Defaults to "eps".
             plot_type (str, optional): The type of plot. Defaults to 'peakmap'.
             plot_3d (bool, optional): Whether to plot in 3D. Defaults to True.
             backend (str, optional): The backend for plotting. Defaults to 'ms_matplotlib'.
@@ -582,7 +576,7 @@ class ModelInterface(object):
         x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
         x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
 
-        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps, pred_type)
+        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps)
 
         pred_noise_df = self._ms2_mesh_to_df(pred_noise)
         pred_noise_plot = pred_noise_df.plot(
@@ -754,13 +748,11 @@ class ModelInterface(object):
         self.optimizer.step()
         return loss.item()
 
-    def _predict_one_batch(self, x_start, x_cond, num_steps=1000, pred_type="eps"):
+    def _predict_one_batch(self, x_start, x_cond, num_steps=1000):
         """Predict one batch"""
         self.model.eval()
         with torch.no_grad():
-            sample, pred_noise = self.sample(
-                x_start, x_cond, num_steps=num_steps, pred_type=pred_type
-            )
+            sample, pred_noise = self.sample(x_start, x_cond, num_steps=num_steps)
         return sample[0].cpu().detach().numpy(), pred_noise[0].cpu().detach().numpy()
 
     @staticmethod

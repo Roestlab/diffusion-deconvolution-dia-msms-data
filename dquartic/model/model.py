@@ -12,6 +12,7 @@ class DDIMDiffusionModel(ModelInterface):
         num_timesteps=1000,
         beta_start=0.001,
         beta_end=0.00125,
+        pred_type="eps",
         ms1_loss_weight=0.0,
         device="cuda",
         **kwargs,
@@ -26,6 +27,7 @@ class DDIMDiffusionModel(ModelInterface):
         self.beta = get_beta_schedule(num_timesteps, beta_start, beta_end).to(device)
         self.alpha = get_alpha(self.beta)
         self.alpha_bar = get_alpha_bar(self.alpha)
+        self.pred_type = pred_type
         self.ms1_loss_weight = ms1_loss_weight
 
     def q_sample(self, x_start, t, noise=None):
@@ -40,7 +42,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         return sqrt_alpha_bar_t * x_start + sqrt_one_minus_alpha_bar_t * noise
 
-    def p_sample(self, x_t, x_cond, t, pred_type="eps"):
+    def p_sample(self, x_t, x_cond, t):
         """
         Perform a reverse sampling step.
         Can switch between predicting initial input x0 or noise eps.
@@ -49,7 +51,6 @@ class DDIMDiffusionModel(ModelInterface):
             x_t: Current state tensor at time t.
             x_cond: Conditioning input tensor.
             t: Current timestep.
-            pred_type: Prediction type ('eps' for noise, 'x0' for initial input).
         """
         batch_size = x_t.size(0)
         t_tensor = torch.full((batch_size,), t, device=self.device, dtype=torch.long)
@@ -59,18 +60,18 @@ class DDIMDiffusionModel(ModelInterface):
         sqrt_alpha_bar_t = torch.sqrt(alpha_bar_t)
         sqrt_one_minus_alpha_bar_t = torch.sqrt(1 - alpha_bar_t)
 
-        if pred_type == "eps":
+        if self.pred_type == "eps":
             # Predict noise
             eps_pred = self.model(x_t, x_cond, t_tensor)
             # Compute x_0 prediction
             x0_pred = (x_t - sqrt_one_minus_alpha_bar_t * eps_pred) / sqrt_alpha_bar_t
-        elif pred_type == "x0":
+        elif self.pred_type == "x0":
             # Predict x_0 directly
             x0_pred = self.model(x_t, x_cond, t_tensor)
             # Compute eps_pred from x0_pred
             eps_pred = (x_t - sqrt_alpha_bar_t * x0_pred) / sqrt_one_minus_alpha_bar_t
         else:
-            raise ValueError(f"Unknown pred_type: {pred_type}")
+            raise ValueError(f"Unknown pred_type: {self.pred_type}")
 
         # Compute x_{t-1}
         if t > 0:
@@ -83,7 +84,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t_prev, eps_pred
 
-    def sample(self, x, x_cond, num_steps=1000, pred_type="eps"):
+    def sample(self, x, x_cond, num_steps=1000):
         """
         Generate samples from the model.
 
@@ -91,7 +92,6 @@ class DDIMDiffusionModel(ModelInterface):
             x: Initial input tensor.
             x_cond: Conditioning input tensor.
             num_steps: Number of sampling steps.
-            pred_type: Prediction type ('eps' or 'x0').
         """
         x_t = x
         pred_noise = None
@@ -100,11 +100,11 @@ class DDIMDiffusionModel(ModelInterface):
 
         for t in time_steps:
             t = t.long()
-            x_t, pred_noise = self.p_sample(x_t, x_cond, t.item(), pred_type=pred_type)
+            x_t, pred_noise = self.p_sample(x_t, x_cond, t.item())
 
         return x_t, pred_noise
 
-    def train_step(self, x_start, x_cond, noise=None, pred_type="eps", ms1_loss_weight=0.0):
+    def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step.
 
@@ -112,7 +112,6 @@ class DDIMDiffusionModel(ModelInterface):
             x_start: The initial data samples (x0).
             x_cond: Conditioning input tensor.
             noise: Optional noise tensor. If None, it will be sampled randomly.
-            pred_type: Prediction type ('eps' for noise prediction, 'x0' for initial input prediction).
             ms1_loss_weight: Weight for the additional loss component.
         """
         batch_size = x_start.size(0)
@@ -121,7 +120,7 @@ class DDIMDiffusionModel(ModelInterface):
         noise = torch.randn_like(x_start) if noise is None else noise
         x_t = self.q_sample(x_start, t, noise)
 
-        if pred_type == "eps":
+        if self.pred_type == "eps":
             # Predict noise
             eps_pred = self.model(x_t, x_cond, t)
             # Compute primary loss between predicted noise and true noise
@@ -134,7 +133,7 @@ class DDIMDiffusionModel(ModelInterface):
                 additional_loss = F.mse_loss(tic, x_cond)
             else:
                 additional_loss = 0.0
-        elif pred_type == "x0":
+        elif self.pred_type == "x0":
             # Predict x0
             x0_pred = self.model(x_t, x_cond, t)
             # Compute primary loss between predicted x0 and true x0
@@ -148,7 +147,7 @@ class DDIMDiffusionModel(ModelInterface):
             else:
                 additional_loss = 0.0
         else:
-            raise ValueError(f"Unknown pred_type: {pred_type}")
+            raise ValueError(f"Unknown pred_type: {self.pred_type}")
 
         # Combine primary loss and additional loss
         loss = (1 - ms1_loss_weight) * primary_loss + ms1_loss_weight * additional_loss
