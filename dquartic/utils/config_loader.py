@@ -17,22 +17,28 @@ def load_train_config(config_path: str, **kwargs):
 
     # Override the config params with the keyword arguments
     if "ms2_data_path" in kwargs:
-        config_params["data"]["ms2_data_path"] = kwargs["ms2_data_path"]
+        if kwargs["ms2_data_path"] is not None:
+            config_params["data"]["ms2_data_path"] = kwargs["ms2_data_path"]
 
     if "ms1_data_path" in kwargs:
-        config_params["data"]["ms1_data_path"] = kwargs["ms1_data_path"]
+        if kwargs["ms1_data_path"] is not None:
+            config_params["data"]["ms1_data_path"] = kwargs["ms1_data_path"]
 
     if "batch_size" in kwargs:
-        config_params["model"]["batch_size"] = kwargs["batch_size"]
+        if kwargs["batch_size"] is not None:
+            config_params["model"]["batch_size"] = kwargs["batch_size"]
 
     if "checkpoint_path" in kwargs:
-        config_params["model"]["checkpoint_path"] = kwargs["checkpoint_path"]
+        if kwargs["checkpoint_path"] is not None:
+            config_params["model"]["checkpoint_path"] = kwargs["checkpoint_path"]
 
     if "use_wandb" in kwargs:
-        config_params["wandb"]["use_wandb"] = kwargs["use_wandb"]
+        if kwargs["use_wandb"] is not None:
+            config_params["wandb"]["use_wandb"] = kwargs["use_wandb"]
 
     if "threads" in kwargs:
-        config_params["threads"] = kwargs["threads"]
+        if kwargs["threads"] is not None:
+            config_params["threads"] = kwargs["threads"]
 
     return config_params
 
