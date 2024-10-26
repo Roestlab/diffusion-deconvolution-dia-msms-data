@@ -1,0 +1,45 @@
+{
+    "data":{
+        "ms2_data_path": "data/MS2_data.csv",
+        "ms1_data_path": "data/MS1_data.csv",
+        "normalize": "minmax"
+    },
+    "model":{
+        "checkpoint_path": "best_model.ckpt",
+        "num_epochs": 10000,
+        "warmup_epochs": 5,
+        "batch_size": 1,
+        "learning_rate": 0.00001,
+        "num_timesteps": 1000,
+        "beta_start": 0.001,
+        "beta_end": 0.00125,
+        "pred_type": "eps",
+        "ms1_loss_weight": 0.0,
+        "use_model": "Unet1D",
+        "CustomTransformer":{
+            "input_dim": 40000,
+            "hidden_dim": 1024,
+            "num_heads": 8,
+            "num_layers": 8
+        },
+        "Unet1D" : {
+            "dim": 4,
+            "channels": 1,
+            "dim_mults": [1, 2, 2, 3, 3, 4, 4],
+            "cond_channels": 1,
+            "cond_init_dim": 4,
+            "has_condition": true
+        }
+    },
+    "wandb": {
+        "use_wandb": true,
+        "wandb_project": "dquartic",
+        "wandb_name": null,
+        "wandb_id": null,
+        "wandb_resume": null,
+        "wandb_architecture": "DDIM(Unet1D)",
+        "wandb_dataset": "MS2",
+        "wandb_mode": "offline"
+    },
+    "threads": 4
+}
