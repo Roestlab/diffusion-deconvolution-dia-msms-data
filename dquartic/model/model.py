@@ -5,6 +5,21 @@ from .model_interface import ModelInterface
 from .building_blocks import get_beta_schedule, get_alpha, get_alpha_bar
 
 
+# normalization functions
+
+
+def normalize_to_neg_one_to_one(img):
+    return img * 2 - 1
+
+
+def unnormalize_to_zero_to_one(t):
+    return (t + 1) * 0.5
+
+
+def identity(t, *args, **kwargs):
+    return t
+
+
 class DDIMDiffusionModel(ModelInterface):
     def __init__(
         self,
@@ -13,6 +28,7 @@ class DDIMDiffusionModel(ModelInterface):
         beta_start=0.001,
         beta_end=0.00125,
         pred_type="eps",
+        auto_normalize=False,
         ms1_loss_weight=0.0,
         device="cuda",
         **kwargs,
@@ -24,9 +40,18 @@ class DDIMDiffusionModel(ModelInterface):
         self.device = device
 
         # Define beta schedule and compute alpha and alpha_bar
+
         self.beta = get_beta_schedule(num_timesteps, beta_start, beta_end).to(device)
         self.alpha = get_alpha(self.beta)
         self.alpha_bar = get_alpha_bar(self.alpha)
+
+        # whether to autonormalize
+
+        self.normalize = normalize_to_neg_one_to_one if auto_normalize else identity
+        self.unnormalize = unnormalize_to_zero_to_one if auto_normalize else identity
+
+        # other parameters
+
         self.pred_type = pred_type
         self.ms1_loss_weight = ms1_loss_weight
 
@@ -102,6 +127,7 @@ class DDIMDiffusionModel(ModelInterface):
             t = t.long()
             x_t, pred_noise = self.p_sample(x_t, x_cond, t.item())
 
+        x_t, pred_noise = self.unnormalize(x_t), self.unnormalize(pred_noise)
         return x_t, pred_noise
 
     def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
@@ -118,6 +144,7 @@ class DDIMDiffusionModel(ModelInterface):
         t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
 
         noise = torch.randn_like(x_start) if noise is None else noise
+        x_start = self.normalize(x_start)
         x_t = self.q_sample(x_start, t, noise)
 
         if self.pred_type == "eps":

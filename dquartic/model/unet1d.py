@@ -18,9 +18,11 @@ from rotary_embedding_torch import RotaryEmbedding
 
 # constants
 
+
 AttentionConfig = namedtuple(
     "AttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"]
 )
+
 
 # helpers functions
 
@@ -50,6 +52,7 @@ def once(fn):
 
 
 print_once = once(print)
+
 
 # small helper modules
 
