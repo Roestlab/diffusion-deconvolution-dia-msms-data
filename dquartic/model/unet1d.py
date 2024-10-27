@@ -437,7 +437,8 @@ class Unet1D(Module):
         self.final_act = nn.Softplus() if pos_output_only else nn.Identity()
 
     def forward(self, x, x_cond, time):
-        x = rearrange(x, "b c n -> c b n")
+        b, c, n = x.shape
+        x = rearrange(x, "b c n -> (b c) () n", b=b, c=c, n=n)
         x = self.init_conv(x)
         r = x.clone()
         t = self.time_mlp(time)
@@ -459,12 +460,12 @@ class Unet1D(Module):
 
             x = downsample(x)
 
-        c, _, n = x.shape
-        x = rearrange(x, "c b n -> 1 (b n) c", c=c, n=n)
+        _, _, n = x.shape
+        x = rearrange(x, "(b c) d n -> b (d n) c", b=b, c=c, n=n)
         x = self.mid_block1(x, t)
         x = self.mid_attn(x, cond=cs)
         x = self.mid_block2(x, t)
-        x = rearrange(x, "1 (b n) c -> c b n", c=c, n=n)
+        x = rearrange(x, "b (d n) c -> (b c) d n", b=b, c=c, n=n)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
@@ -480,5 +481,5 @@ class Unet1D(Module):
 
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
-        x = rearrange(x, "c b n -> b c n")
+        x = rearrange(x, "(b c) d n -> b (c d) n", b=b, c=c, n=n)
         return self.final_act(x)
