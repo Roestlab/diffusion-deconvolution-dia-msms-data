@@ -15,6 +15,7 @@
         "beta_end": 0.00125,
         "pred_type": "eps",
         "ms1_loss_weight": 0.0,
+        "auto_normalize": false,
         "use_model": "Unet1D",
         "CustomTransformer":{
             "input_dim": 40000,

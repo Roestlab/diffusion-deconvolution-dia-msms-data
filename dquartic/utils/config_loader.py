@@ -67,6 +67,7 @@ def generate_train_config(config_path: str):
             "beta_end": 0.00125,
             "pred_type": "eps",
             "ms1_loss_weight": 0.0,
+            "auto_normalize": False,
             "use_model": "Unet1D",
             "CustomTransformer": {
                 "input_dim": 40000,

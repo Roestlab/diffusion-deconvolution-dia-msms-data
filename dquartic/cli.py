@@ -107,6 +107,7 @@ def train(
         beta_start=config['model']['beta_start'],
         beta_end=config['model']['beta_end'],
         pred_type=config['model']['pred_type'],
+        auto_normalize=config['model']['auto_normalize'],
         ms1_loss_weight=config['model']['ms1_loss_weight'],
         device=device,
     )
