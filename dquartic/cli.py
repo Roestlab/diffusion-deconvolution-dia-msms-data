@@ -4,7 +4,7 @@ from .utils.data_loader import DIAMSDataset
 from .utils.config_loader import load_train_config, generate_train_config
 from .model.building_blocks import CustomTransformer
 from .model.model import DDIMDiffusionModel
-from .model.unet1d import Unet1D
+from .model.unet1d import UNet1d
 from torch.utils.data import DataLoader
 import torch
 import wandb
@@ -81,16 +81,19 @@ def train(
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if config['model']['use_model'] == "Unet1D":
+    if config['model']['use_model'] == "UNet1d":
         model_init = {
-            "dim": config['model']['Unet1D']['dim'],
-            "channels": config['model']['Unet1D']['channels'],
-            "dim_mults": tuple(config['model']['Unet1D']['dim_mults']),
-            "cond_channels": config['model']['Unet1D']['cond_channels'],
-            "cond_init_dim": config['model']['Unet1D']['cond_init_dim'],
-            "has_condition": config['model']['Unet1D']['has_condition'],
+            "dim": config['model']['UNet1d']['dim'],
+            "channels": config['model']['UNet1d']['channels'],
+            "dim_mults": tuple(config['model']['UNet1d']['dim_mults']),
+            "conditional": config['model']['UNet1d']['conditional'],
+            "init_cond_channels": config['model']['UNet1d']['init_cond_channels'],
+            "attn_cond_channels": config['model']['UNet1d']['attn_cond_channels'],
+            "attention_dim_mult": config['model']['UNet1d']['attention_dim_mult'],
+            "downsample_dim": config['model']['UNet1d']['downsample_dim'],
+            "simple": config['model']['UNet1d']['simple'],
         }
-        model = Unet1D(**model_init).to(device)
+        model = UNet1d(**model_init).to(device)
     elif config['model']['use_model'] == "CustomTransformer":
         model_init = {
             "input_dim": config['model']['CustomTransformer']['input_dim'],
@@ -104,9 +107,9 @@ def train(
     diffusion_model = DDIMDiffusionModel(
         model_class=model,
         num_timesteps=config['model']['num_timesteps'],
-        beta_start=config['model']['beta_start'],
-        beta_end=config['model']['beta_end'],
+        beta_schedule_type=config['model']['beta_schedule_type'],
         pred_type=config['model']['pred_type'],
+        auto_normalize=config['model']['auto_normalize'],
         ms1_loss_weight=config['model']['ms1_loss_weight'],
         device=device,
     )

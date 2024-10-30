@@ -3,21 +3,6 @@ import torch
 import torch.nn as nn
 
 
-def get_beta_schedule(num_timesteps, beta_start=0.0001, beta_end=0.02):
-    """
-    Returns a beta schedule for the diffusion process.
-    """
-    return torch.linspace(beta_start, beta_end, num_timesteps)
-
-
-def get_alpha(beta):
-    return 1.0 - beta
-
-
-def get_alpha_bar(alpha):
-    return torch.cumprod(alpha, dim=0)
-
-
 def apply_rope(x):
     """
     Applies Rotary Position Embeddings (RoPE) to the input tensor.
@@ -161,11 +146,11 @@ class CustomTransformer(nn.Module):
             [CustomTransformerLayer(hidden_dim, num_heads) for _ in range(num_layers)]
         )
 
-    def forward(self, x_t, x_cond, t):
+    def forward(self, x_t, t, x_cond):
         """
         x_t: Noisy input at timestep t, shape (batch_size, seqlen1, input_dim)
-        x_cond: Conditional prior, shape (batch_size, seqlen2, input_dim)
         t: Timestep tensor, shape (batch_size,)
+        x_cond: Conditional prior, shape (batch_size, seqlen2, input_dim)
         """
         # Project inputs
         x_t_proj = self.input_projection(x_t)  # Shape: (batch_size, seqlen1, hidden_dim)

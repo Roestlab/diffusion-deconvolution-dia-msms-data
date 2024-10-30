@@ -1,8 +1,42 @@
+import math
+
 import torch
 import torch.nn.functional as F
 
+from einops import reduce
+
 from .model_interface import ModelInterface
-from .building_blocks import get_beta_schedule, get_alpha, get_alpha_bar
+
+
+# beta schedule functions
+
+
+def get_linear_beta_schedule(num_timesteps, beta_start=0.0001, beta_end=0.02):
+    """
+    Returns a linear beta schedule for the diffusion process.
+    """
+    return torch.linspace(beta_start, beta_end, num_timesteps, dtype = torch.float64)
+
+
+def get_cosine_beta_schedule(num_timesteps, s = 0.008):
+    """
+    Cosine beta schedule
+    as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
+    """
+    steps = num_timesteps + 1
+    x = torch.linspace(0, num_timesteps, steps, dtype = torch.float64)
+    alphas_cumprod = torch.cos(((x / num_timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
+    alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+    betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+    return torch.clip(betas, 0, 0.999)
+
+
+def get_alphas(betas):
+    return 1.0 - betas
+
+
+def get_alpha_bars(alpha):
+    return torch.cumprod(alpha, dim=0)
 
 
 # normalization functions
@@ -20,15 +54,23 @@ def identity(t, *args, **kwargs):
     return t
 
 
+# other helper functions
+
+
+def extract(a, t, x_shape):
+    b, *_ = t.shape
+    out = a.gather(-1, t)
+    return out.reshape(b, *((1,) * (len(x_shape) - 1)))
+
+
 class DDIMDiffusionModel(ModelInterface):
     def __init__(
         self,
         model_class,
         num_timesteps=1000,
-        beta_start=0.001,
-        beta_end=0.00125,
+        beta_schedule_type="cosine",
         pred_type="eps",
-        auto_normalize=False,
+        auto_normalize=True,
         ms1_loss_weight=0.0,
         device="cuda",
         **kwargs,
@@ -41,9 +83,20 @@ class DDIMDiffusionModel(ModelInterface):
 
         # Define beta schedule and compute alpha and alpha_bar
 
-        self.beta = get_beta_schedule(num_timesteps, beta_start, beta_end).to(device)
-        self.alpha = get_alpha(self.beta)
-        self.alpha_bar = get_alpha_bar(self.alpha)
+        self.betas = get_linear_beta_schedule(num_timesteps).to(device) if beta_schedule_type == "linear" else get_cosine_beta_schedule(num_timesteps).to(device)
+        self.alphas = get_alphas(self.betas)
+        self.alpha_bars = get_alpha_bars(self.alphas)
+
+        # calculate loss weight
+
+        snr = self.alpha_bars / (1 - self.alpha_bars)
+
+        if pred_type == "eps":
+            self.loss_weight = torch.ones_like(snr)
+        elif pred_type == "x0":
+            self.loss_weight = snr
+        else:
+            raise ValueError(f"Unknown pred_type: {pred_type}")
 
         # whether to autonormalize
 
@@ -62,37 +115,38 @@ class DDIMDiffusionModel(ModelInterface):
         if noise is None:
             noise = torch.randn_like(x_start)
 
-        sqrt_alpha_bar_t = torch.sqrt(self.alpha_bar[t])[:, None, None]
-        sqrt_one_minus_alpha_bar_t = torch.sqrt(1 - self.alpha_bar[t])[:, None, None]
+        sqrt_alpha_bar_t = torch.sqrt(self.alpha_bars[t])[:, None, None]
+        sqrt_one_minus_alpha_bar_t = torch.sqrt(1.0 - self.alpha_bars[t])[:, None, None]
 
         return sqrt_alpha_bar_t * x_start + sqrt_one_minus_alpha_bar_t * noise
 
-    def p_sample(self, x_t, x_cond, t):
+    def p_sample(self, x_t, t, init_cond=None, attn_cond=None):
         """
         Perform a reverse sampling step.
         Can switch between predicting initial input x0 or noise eps.
 
         Args:
             x_t: Current state tensor at time t.
-            x_cond: Conditioning input tensor.
             t: Current timestep.
+            init_cond: Conditioning input tensor to anchor the prediction.
+            attn_cond: Conditioning input tensor with semantic information.
         """
         batch_size = x_t.size(0)
         t_tensor = torch.full((batch_size,), t, device=self.device, dtype=torch.long)
 
         # Compute constants
-        alpha_bar_t = self.alpha_bar[t]
+        alpha_bar_t = self.alpha_bars[t]
         sqrt_alpha_bar_t = torch.sqrt(alpha_bar_t)
-        sqrt_one_minus_alpha_bar_t = torch.sqrt(1 - alpha_bar_t)
+        sqrt_one_minus_alpha_bar_t = torch.sqrt(1.0 - alpha_bar_t)
 
         if self.pred_type == "eps":
             # Predict noise
-            eps_pred = self.model(x_t, x_cond, t_tensor)
+            eps_pred = self.model(x_t, t_tensor, t_tensor, init_cond, attn_cond)
             # Compute x_0 prediction
             x0_pred = (x_t - sqrt_one_minus_alpha_bar_t * eps_pred) / sqrt_alpha_bar_t
         elif self.pred_type == "x0":
             # Predict x_0 directly
-            x0_pred = self.model(x_t, x_cond, t_tensor)
+            x0_pred = self.model(x_t, t_tensor, init_cond, attn_cond)
             # Compute eps_pred from x0_pred
             eps_pred = (x_t - sqrt_alpha_bar_t * x0_pred) / sqrt_one_minus_alpha_bar_t
         else:
@@ -100,22 +154,23 @@ class DDIMDiffusionModel(ModelInterface):
 
         # Compute x_{t-1}
         if t > 0:
-            alpha_bar_t_prev = self.alpha_bar[t - 1]
+            alpha_bar_t_prev = self.alpha_bars[t - 1]
             sqrt_alpha_bar_t_prev = torch.sqrt(alpha_bar_t_prev)
-            sqrt_one_minus_alpha_bar_t_prev = torch.sqrt(1 - alpha_bar_t_prev)
+            sqrt_one_minus_alpha_bar_t_prev = torch.sqrt(1.0 - alpha_bar_t_prev)
             x_t_prev = sqrt_alpha_bar_t_prev * x0_pred + sqrt_one_minus_alpha_bar_t_prev * eps_pred
         else:
             x_t_prev = x0_pred
 
         return x_t_prev, eps_pred
 
-    def sample(self, x, x_cond, num_steps=1000):
+    def sample(self, x, ms2_cond=None, ms1_cond=None, num_steps=1000):
         """
         Generate samples from the model.
 
         Args:
             x: Initial input tensor.
-            x_cond: Conditioning input tensor.
+            ms2_cond: The MS2 mixture data maps.
+            ms1_cond: The clean MS1 data maps.
             num_steps: Number of sampling steps.
         """
         x_t = x
@@ -125,18 +180,19 @@ class DDIMDiffusionModel(ModelInterface):
 
         for t in time_steps:
             t = t.long()
-            x_t, pred_noise = self.p_sample(x_t, x_cond, t.item())
+            x_t, pred_noise = self.p_sample(x_t, t.item(), ms2_cond, ms1_cond)
 
         x_t, pred_noise = self.unnormalize(x_t), self.unnormalize(pred_noise)
         return x_t, pred_noise
 
-    def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
+    def train_step(self, x_start, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step.
 
         Args:
-            x_start: The initial data samples (x0).
-            x_cond: Conditioning input tensor.
+            x_start: The clean MS2 data maps (x0).
+            ms2_cond: The MS2 mixture data maps.
+            ms1_cond: The clean MS1 data maps.
             noise: Optional noise tensor. If None, it will be sampled randomly.
             ms1_loss_weight: Weight for the additional loss component.
         """
@@ -146,37 +202,43 @@ class DDIMDiffusionModel(ModelInterface):
         noise = torch.randn_like(x_start) if noise is None else noise
         x_start = self.normalize(x_start)
         x_t = self.q_sample(x_start, t, noise)
+        primary_loss, additional_loss = torch.zeros((batch_size,), device=self.device), torch.zeros((batch_size,), device=self.device)
 
         if self.pred_type == "eps":
             # Predict noise
-            eps_pred = self.model(x_t, x_cond, t)
+            eps_pred = self.model(x_t, t, ms2_cond, ms1_cond)
             # Compute primary loss between predicted noise and true noise
             primary_loss = F.mse_loss(eps_pred, noise)
 
             # Additional loss term
             if ms1_loss_weight > 0.0:
-                # Compute normalized tic
-                tic = torch.sum(x_t - eps_pred, dim=-1) / torch.max(tic)
-                additional_loss = F.mse_loss(tic, x_cond)
+                # Compute summary ion chromatograms and calculate additional loss
+                for func in (torch.sum, torch.mean, torch.max):
+                    sic = func(x_t - eps_pred, dim=-1)
+                    ms1_sic = func(ms1_cond, dim=-1)
+                    additional_loss = additional_loss + F.mse_loss(sic / torch.max(sic), ms1_sic / torch.max(ms1_sic))
             else:
                 additional_loss = 0.0
         elif self.pred_type == "x0":
             # Predict x0
-            x0_pred = self.model(x_t, x_cond, t)
+            x0_pred = self.model(x_t, t, ms2_cond, ms1_cond)
             # Compute primary loss between predicted x0 and true x0
             primary_loss = F.mse_loss(x0_pred, x_start)
 
             # Additional loss term
             if ms1_loss_weight > 0.0:
-                # Compute normalized tic
-                tic = torch.sum(x_t - eps_pred, dim=-1) / torch.max(tic)
-                additional_loss = F.mse_loss(tic, x_cond)
-            else:
-                additional_loss = 0.0
+                # Compute ms1 pseudo chromatograms and calculate additional loss
+                for func in (torch.sum, torch.mean, torch.max):
+                    sic = func(x0_pred, dim=-1)
+                    ms1_sic = func(ms1_cond, dim=-1)
+                    additional_loss = additional_loss + F.mse_loss(sic / torch.max(sic), ms1_sic / torch.max(ms1_sic))
         else:
             raise ValueError(f"Unknown pred_type: {self.pred_type}")
 
         # Combine primary loss and additional loss
-        loss = (1 - ms1_loss_weight) * primary_loss + ms1_loss_weight * additional_loss
+        primary_loss = reduce(primary_loss, "b ... -> b", "mean") if primary_loss.dim() > 1 else primary_loss
+        additional_loss = reduce(additional_loss, "b ... -> b", "mean") if additional_loss.dim() > 1 else additional_loss
+        loss = (1 - ms1_loss_weight) * primary_loss + ms1_loss_weight * additional_loss if ms1_loss_weight > 0.0 else primary_loss
+        loss = loss * extract(self.loss_weight, t, loss.shape)
 
         return loss

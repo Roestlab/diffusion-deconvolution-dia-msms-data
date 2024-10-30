@@ -12,6 +12,7 @@ from torch.nn import Module, ModuleList
 import torch.nn.functional as F
 
 from einops import rearrange
+from einops.layers.torch import Rearrange
 
 from rotary_embedding_torch import RotaryEmbedding
 
@@ -256,7 +257,7 @@ class Attend(nn.Module):
 
 
 class LinearAttention(Module):
-    def __init__(self, dim, heads=2, dim_head=8):
+    def __init__(self, dim, heads=4, dim_head=32):
         super().__init__()
         self.scale = dim_head**-0.5
         self.heads = heads
@@ -282,7 +283,7 @@ class LinearAttention(Module):
 
 
 class Attention(Module):
-    def __init__(self, dim, heads=2, dim_head=8, flash=False, use_xattn=False, cond_dim=1):
+    def __init__(self, dim, heads=4, dim_head=32, flash=False, use_xattn=False, cond_dim=1):
         super().__init__()
         self.use_xattn = use_xattn
         self.heads = heads
@@ -318,10 +319,45 @@ class Attention(Module):
         return self.to_out(out)
 
 
+# embedding model and helper classes
+
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, dim),
+        )
+    def forward(self, x):
+        return self.net(x)
+    
+
+class Transformer(nn.Module):
+    def __init__(self, dim, depth=6, heads=4, dim_head=32, mlp_dim=None, use_xattn=False, cond_dim=1):
+        super().__init__()
+        self.layers = nn.ModuleList([])
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                Attention(dim, heads=heads, dim_head=dim_head, use_xattn=use_xattn, cond_dim=cond_dim),
+                Rearrange("b c n -> b n c"),
+                FeedForward(dim, default(mlp_dim, dim * 4)),
+                Rearrange("b n c -> b c n"),
+            ]))
+
+    def forward(self, x, cond=None):
+        for attn, ra1, ff, ra2 in self.layers:
+            x = attn(x, cond=cond) + x
+            x = ra2(ff(ra1(x))) + x
+        return x
+
+
 # model
 
 
-class Unet1D(Module):
+class UNet1d(Module):
     def __init__(
         self,
         dim,
@@ -330,14 +366,18 @@ class Unet1D(Module):
         dim_mults=(1, 2, 4, 8),
         channels=3,
         dropout=0.0,
-        has_condition=False,
-        cond_channels=None,
-        cond_init_dim=None,
+        conditional=True,
+        init_cond_channels=None,
+        attn_cond_channels=None,
+        attn_cond_init_dim=None,
         learned_variance=False,
         sinusoidal_pos_emb_theta=10000,
-        attn_dim_head=8,
-        attn_heads=2,
-        downsampled_n=625,
+        attn_heads=4,
+        attn_dim_head=32,
+        tfer_dim_mult=620,
+        tfer_depth=6,
+        downsample_dim=40000,
+        simple=True,
         pos_output_only=False,
     ):
         super().__init__()
@@ -345,8 +385,8 @@ class Unet1D(Module):
         # determine dimensions
 
         self.channels = channels
-        self.has_condition = has_condition
-        input_channels = channels
+        self.conditional = conditional
+        input_channels = channels + default(init_cond_channels, 0)
 
         init_dim = default(init_dim, dim)
         self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
@@ -364,14 +404,20 @@ class Unet1D(Module):
 
         resnet_block = partial(ResnetBlock, time_emb_dim=time_dim, dropout=dropout)
 
-        # conditioning signal
+        # attn conditioning signal
 
-        if self.has_condition:
-            self.cond_proj = nn.Sequential(
-                nn.Conv1d(cond_channels, cond_init_dim, 3, padding=1),
+        if self.conditional:
+            attn_cond_init_dim = default(attn_cond_init_dim, dim * 4)
+            self.attn_cond_proj = ModuleList([nn.Identity(), nn.Sequential(
+                nn.Conv1d(attn_cond_channels, attn_cond_init_dim, 7, padding=3),
                 nn.GELU(),
-                nn.Conv1d(cond_init_dim, cond_init_dim, 1),
-            )
+                nn.Conv1d(attn_cond_init_dim, attn_cond_init_dim, 1),
+            )]) if simple else ModuleList([nn.Sequential(
+                nn.Conv1d(attn_cond_channels, attn_cond_init_dim, 7, padding=3),
+                resnet_block(attn_cond_init_dim, attn_cond_init_dim),
+                resnet_block(attn_cond_init_dim, attn_cond_init_dim),
+                Residual(PreNorm(attn_cond_init_dim, LinearAttention(attn_cond_init_dim))),
+            ), Transformer(attn_cond_init_dim * tfer_dim_mult, depth=tfer_depth, heads=attn_heads, dim_head=attn_dim_head)])
 
         # layers
 
@@ -397,6 +443,7 @@ class Unet1D(Module):
                 )
             )
 
+        downsampled_n = downsample_dim / (len(dim_mults) - 1)
         mid_dim = dims[-1]
         self.mid_block1 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
         self.mid_attn = Residual(
@@ -404,13 +451,13 @@ class Unet1D(Module):
                 mid_dim * downsampled_n,
                 Attention(
                     mid_dim * downsampled_n,
-                    dim_head=attn_dim_head,
                     heads=attn_heads,
-                    use_xattn=self.has_condition,
-                    cond_dim=cond_init_dim,
+                    dim_head=attn_dim_head,
+                    use_xattn=self.conditional,
+                    cond_dim=attn_cond_init_dim,
                 ),
             )
-        )
+        ) if simple else Residual(PreNorm(mid_dim * downsampled_n, Transformer(mid_dim * downsampled_n, depth=tfer_depth, heads=attn_heads, dim_head=attn_dim_head, use_xattn=self.conditional, cond_dim=attn_cond_init_dim)))
         self.mid_block2 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
@@ -439,17 +486,26 @@ class Unet1D(Module):
 
         self.final_act = nn.Softplus() if pos_output_only else nn.Identity()
 
-    def forward(self, x, x_cond, time):
+    def forward(self, x, time, init_cond=None, attn_cond=None):
         b, c, n = x.shape
-        x = rearrange(x, "b c n -> (b c) () n", b=b, c=c, n=n)
+        x = rearrange(x, "b rt mz -> (b rt) () mz", b=b, rt=c, mz=n)
+
+        if self.conditional:
+            init_cond = default(init_cond, lambda: torch.zeros_like(x))
+            init_cond = rearrange(init_cond, "b rt mz -> (b rt) () mz", b=b, rt=c, mz=n)
+            x = torch.cat((init_cond, x), dim=1)
+
         x = self.init_conv(x)
         r = x.clone()
         t = self.time_mlp(time)
-        cs = (
-            self.cond_proj(rearrange(x_cond, "b n -> b () n") if len(x_cond.shape) == 2 else x_cond)
-            if self.has_condition
-            else None
-        )
+
+        if self.conditional:
+            attn_cond = default(attn_cond, lambda: torch.zeros_like(x))
+            attn_cond = rearrange(attn_cond, "b rt -> (b rt) () ()") if attn_cond.dim() == 2 else rearrange(attn_cond, "b rt mz -> (b rt) () mz")
+            mz_net, rt_net = self.attn_cond_proj
+            attn_cond = mz_net(attn_cond)
+            attn_cond = rearrange(attn_cond, "(b rt) d mz -> b (d mz) rt", b=b)
+            attn_cond = rt_net(attn_cond)
 
         h = []
 
@@ -464,11 +520,11 @@ class Unet1D(Module):
             x = downsample(x)
 
         _, _, n = x.shape
-        x = rearrange(x, "(b c) d n -> b (d n) c", b=b, c=c, n=n)
+        x = rearrange(x, "(b rt) d mz -> b (d mz) rt", b=b, rt=c, mz=n)
         x = self.mid_block1(x, t)
-        x = self.mid_attn(x, cond=cs)
+        x = self.mid_attn(x, cond=attn_cond)
         x = self.mid_block2(x, t)
-        x = rearrange(x, "b (d n) c -> (b c) d n", b=b, c=c, n=n)
+        x = rearrange(x, "b (d mz) rt -> (b rt) d mz", b=b, rt=c, mz=n)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
@@ -484,5 +540,5 @@ class Unet1D(Module):
 
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
-        x = rearrange(x, "(b c) d n -> b (c d) n", b=b, c=c, n=n)
+        x = rearrange(x, "(b rt) d mz -> b (rt d) mz", b=b, rt=c, mz=n)
         return self.final_act(x)
