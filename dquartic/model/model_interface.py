@@ -214,6 +214,9 @@ class ModelInterface(object):
         self.lr_scheduler_class = WarmupLR_Scheduler
         self.callback_handler = CallbackHandler()
         self.device = device
+        
+        # Set by DDIM subclass
+        self.ms1_loss_weight = None
 
         # Logging
         self.use_wandb = False
@@ -323,6 +326,7 @@ class ModelInterface(object):
                         best_loss,
                         dataloader,
                         num_steps=[100, 500, 1000],
+                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}"
                     )
 
             continue_training = self.callback_handler.epoch_callback(
@@ -350,6 +354,8 @@ class ModelInterface(object):
         """
         Train the model with the given dataloader for the given number of epochs.
         """
+        print(f"Info: Training {self.__repr__}")
+        
         if warmup_epochs > 0:
             self.train_with_warmup(
                 dataloader,
@@ -409,6 +415,7 @@ class ModelInterface(object):
                             best_loss,
                             dataloader,
                             num_steps=[100, 500, 1000],
+                            path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}"
                         )
 
                 continue_training = self.callback_handler.epoch_callback(
@@ -491,6 +498,8 @@ class ModelInterface(object):
         sample_idx=None,
         mixture_weights=(0.5, 0.5),
         num_steps=[100, 500, 1000],
+        backend="ms_plotly",
+        path="./"
     ):
         """Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2."""
         # Create a wandb Table to log
@@ -507,6 +516,17 @@ class ModelInterface(object):
                 "Predicted MS2",
             ]
         )
+        
+        if sample_idx is None:
+            sample_idx = np.random.randint(len(dataloader.dataset))
+        ms2_1, ms1_1, ms2_2, ms1_2 = dataloader.dataset[sample_idx]
+        x_start, x_cond = ms2_1, ms1_1
+        x_start = x_start.to(self.device).unsqueeze(0)
+        x_cond = x_cond.to(self.device).unsqueeze(0)
+
+        # Simulated mixed spectra from target sample and other sample
+        x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
+        x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
 
         for _num_steps in num_steps:
             # Get sample and prediction
@@ -518,34 +538,60 @@ class ModelInterface(object):
                 pred_noise_plot,
                 pred_plot,
             ) = self.plot_single_prediction(
-                dataloader,
-                sample_idx=sample_idx,
-                mixture_weights=mixture_weights,
+                ms2_1,
+                ms1_1,
+                ms2_2,
+                x_start_rand,
+                x_cond,
                 num_steps=_num_steps,
+                backend=backend,
             )
+            
+            if backend=="ms_matplotlib":
+                wandb_ms2_target_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))
+                )
+                wandb_ms1_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig)))
+                wandb_ms2_noise_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig)))
+                wandb_ms2_input_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig)))
+                wandb_pred_noise_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig)))
+                wandb_pred_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig)))
+            elif backend=="ms_plotly":
+                ms2_target_plot.write_html(f"{path}ms2_target_plot.html", auto_play=False)
+                wandb_ms2_target_plot = wandb.Html(f"{path}ms2_target_plot.html")
+                ms1_plot.write_html(f"{path}ms1_plot.html", auto_play=False)
+                wandb_ms1_plot = wandb.Html(f"{path}ms1_plot.html")
+                ms2_noise_plot.write_html(f"{path}ms2_noise_plot.html", auto_play=False)
+                wandb_ms2_noise_plot = wandb.Html(f"{path}ms2_noise_plot.html")
+                ms2_input_plot.write_html(f"{path}ms2_input_plot.html", auto_play=False)
+                wandb_ms2_input_plot = wandb.Html(f"{path}ms2_input_plot.html")
+                pred_noise_plot.write_html(f"{path}pred_noise_plot.html", auto_play=False)
+                wandb_pred_noise_plot = wandb.Html(f"{path}pred_noise_plot.html")
+                pred_plot.write_html(f"{path}pred_plot.html", auto_play=False)
+                wandb_pred_plot = wandb.Html(f"{path}pred_plot.html")
+            else:
+                raise ValueError(f"Unknown plotting backend: {backend}. Must be 'ms_matplotlib' or 'ms_plotly'.")
 
             table.add_data(
                 _num_steps,
                 epoch,
                 loss,
-                wandb.Image(
-                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))
-                ),
-                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))),
-                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig))),
-                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))),
-                wandb.Image(
-                    PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig))
-                ),
-                wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))),
+                wandb_ms2_target_plot,
+                wandb_ms1_plot,
+                wandb_ms2_noise_plot,
+                wandb_ms2_input_plot,
+                wandb_pred_noise_plot,
+                wandb_pred_plot,
             )
         wandb.log({"predictions_table": table}, commit=False)
 
     def plot_single_prediction(
         self,
-        dataloader,
-        sample_idx=None,
-        mixture_weights=(0.5, 0.5),
+        ms2_1,
+        ms1_1,
+        ms2_2,
+        x_start_rand,
+        x_cond,
         num_steps=1000,
         plot_type="peakmap",
         plot_3d=True,
@@ -570,17 +616,6 @@ class ModelInterface(object):
             raise ImportError(
                 "pyopenms_viz is required for plotting. Install it with `pip install pyopenms_viz`."
             )
-
-        if sample_idx is None:
-            sample_idx = np.random.randint(len(dataloader.dataset))
-        ms2_1, ms1_1, ms2_2, ms1_2 = dataloader.dataset[sample_idx]
-        x_start, x_cond = ms2_1, ms1_1
-        x_start = x_start.to(self.device).unsqueeze(0)
-        x_cond = x_cond.to(self.device).unsqueeze(0)
-
-        # Simulated mixed spectra from target sample and other sample
-        x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
-        x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
 
         pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps)
 
