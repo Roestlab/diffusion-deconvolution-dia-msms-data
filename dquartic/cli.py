@@ -89,7 +89,7 @@ def train(
             "conditional": config['model']['UNet1d']['conditional'],
             "init_cond_channels": config['model']['UNet1d']['init_cond_channels'],
             "attn_cond_channels": config['model']['UNet1d']['attn_cond_channels'],
-            "attention_dim_mult": config['model']['UNet1d']['attention_dim_mult'],
+            "tfer_dim_mult": config['model']['UNet1d']['tfer_dim_mult'],
             "downsample_dim": config['model']['UNet1d']['downsample_dim'],
             "simple": config['model']['UNet1d']['simple'],
         }
