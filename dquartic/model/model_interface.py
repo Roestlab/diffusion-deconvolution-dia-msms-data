@@ -317,7 +317,7 @@ class ModelInterface(object):
                 best_loss = avg_train_loss
                 best_epoch = epoch + 1
                 self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
-                if use_wandb:
+                if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 100 == 0)):
                     self.log_single_prediction(
                         best_epoch,
                         best_loss,
@@ -331,6 +331,9 @@ class ModelInterface(object):
             if not continue_training:
                 print(f"Training stopped at epoch {epoch}")
                 break
+                
+            torch.cuda.empty_cache()
+            
         print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
 
     def train(
@@ -399,8 +402,8 @@ class ModelInterface(object):
                     best_epoch = epoch + 1
                     self.save_checkpoint(None, epoch, best_loss, checkpoint_path)
 
-                    # Only log predictions if using wandb and for the firt epoch and then only after epoch 15 every 500 epochs if the loss is still the best
-                    if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 500 == 0)):
+                    # Only log predictions if using wandb and for the firt epoch and then only after epoch 15 every 100 epochs if the loss is still the best
+                    if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 100 == 0)):
                         self.log_single_prediction(
                             best_epoch,
                             best_loss,
@@ -414,6 +417,9 @@ class ModelInterface(object):
                 if not continue_training:
                     print(f"Training stopped at epoch {epoch}")
                     break
+                
+                torch.cuda.empty_cache()
+                
             print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
 
     def load_checkpoint(self, scheduler, checkpoint_path, device):
