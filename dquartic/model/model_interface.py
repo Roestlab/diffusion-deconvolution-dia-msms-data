@@ -214,7 +214,7 @@ class ModelInterface(object):
         self.lr_scheduler_class = WarmupLR_Scheduler
         self.callback_handler = CallbackHandler()
         self.device = device
-        
+
         # Set by DDIM subclass
         self.ms1_loss_weight = None
 
@@ -326,7 +326,7 @@ class ModelInterface(object):
                         best_loss,
                         dataloader,
                         num_steps=[100, 500, 1000],
-                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}"
+                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
                     )
 
             continue_training = self.callback_handler.epoch_callback(
@@ -335,9 +335,9 @@ class ModelInterface(object):
             if not continue_training:
                 print(f"Training stopped at epoch {epoch}")
                 break
-                
+
             torch.cuda.empty_cache()
-            
+
         print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
 
     def train(
@@ -355,7 +355,7 @@ class ModelInterface(object):
         Train the model with the given dataloader for the given number of epochs.
         """
         print(f"Info: Training {self.__repr__}")
-        
+
         if warmup_epochs > 0:
             self.train_with_warmup(
                 dataloader,
@@ -415,7 +415,7 @@ class ModelInterface(object):
                             best_loss,
                             dataloader,
                             num_steps=[100, 500, 1000],
-                            path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}"
+                            path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
                         )
 
                 continue_training = self.callback_handler.epoch_callback(
@@ -424,9 +424,9 @@ class ModelInterface(object):
                 if not continue_training:
                     print(f"Training stopped at epoch {epoch}")
                     break
-                
+
                 torch.cuda.empty_cache()
-                
+
             print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
 
     def load_checkpoint(self, scheduler, checkpoint_path, device):
@@ -475,8 +475,12 @@ class ModelInterface(object):
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
             x_start, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
-            ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(self.device).unsqueeze(0)
-            pred, _ = self._predict_one_batch(x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps)
+            ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
+                self.device
+            ).unsqueeze(0)
+            pred, _ = self._predict_one_batch(
+                x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+            )
             # Store ms2_1, ms1_1, x_start_rand, pred
             pred_data = {
                 "ms2_1": ms2_1,
@@ -496,7 +500,7 @@ class ModelInterface(object):
         mixture_weights=(0.5, 0.5),
         num_steps=[100, 500, 1000],
         backend="ms_plotly",
-        path="./"
+        path="./",
     ):
         """Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2."""
         # Create a wandb Table to log
@@ -513,17 +517,17 @@ class ModelInterface(object):
                 "Predicted MS2",
             ]
         )
-        
+
         if sample_idx is None:
             sample_idx = np.random.randint(len(dataloader.dataset))
-        ms2_1, ms1_1, ms2_2, ms1_2 = dataloader.dataset[sample_idx]
-        x_start, x_cond = ms2_1, ms1_1
-        x_start = x_start.to(self.device).unsqueeze(0)
-        x_cond = x_cond.to(self.device).unsqueeze(0)
+
+        ms2_1, ms1_1, ms2_2, _ = dataloader.dataset[sample_idx]
+        x_start, ms1_cond = ms2_1.to(self.device).unsqueeze(0), ms1_1.to(self.device).unsqueeze(0)
 
         # Simulated mixed spectra from target sample and other sample
-        x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
-        x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
+        ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
+            self.device
+        ).unsqueeze(0)
 
         for _num_steps in num_steps:
             # Get sample and prediction
@@ -535,25 +539,34 @@ class ModelInterface(object):
                 pred_noise_plot,
                 pred_plot,
             ) = self.plot_single_prediction(
-                ms2_1,
-                ms1_1,
+                x_start,
                 ms2_2,
-                x_start_rand,
-                x_cond,
+                ms2_cond=ms2_cond,
+                ms1_cond=ms1_cond,
                 num_steps=_num_steps,
                 backend=backend,
             )
-            
-            if backend=="ms_matplotlib":
+
+            if backend == "ms_matplotlib":
                 wandb_ms2_target_plot = wandb.Image(
                     PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))
                 )
-                wandb_ms1_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig)))
-                wandb_ms2_noise_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig)))
-                wandb_ms2_input_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig)))
-                wandb_pred_noise_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig)))
-                wandb_pred_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig)))
-            elif backend=="ms_plotly":
+                wandb_ms1_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))
+                )
+                wandb_ms2_noise_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig))
+                )
+                wandb_ms2_input_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))
+                )
+                wandb_pred_noise_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig))
+                )
+                wandb_pred_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))
+                )
+            elif backend == "ms_plotly":
                 ms2_target_plot.write_html(f"{path}ms2_target_plot.html", auto_play=False)
                 wandb_ms2_target_plot = wandb.Html(f"{path}ms2_target_plot.html")
                 ms1_plot.write_html(f"{path}ms1_plot.html", auto_play=False)
@@ -567,7 +580,9 @@ class ModelInterface(object):
                 pred_plot.write_html(f"{path}pred_plot.html", auto_play=False)
                 wandb_pred_plot = wandb.Html(f"{path}pred_plot.html")
             else:
-                raise ValueError(f"Unknown plotting backend: {backend}. Must be 'ms_matplotlib' or 'ms_plotly'.")
+                raise ValueError(
+                    f"Unknown plotting backend: {backend}. Must be 'ms_matplotlib' or 'ms_plotly'."
+                )
 
             table.add_data(
                 _num_steps,
@@ -584,11 +599,10 @@ class ModelInterface(object):
 
     def plot_single_prediction(
         self,
-        ms2_1,
-        ms1_1,
-        ms2_2,
-        x_start_rand,
-        x_cond,
+        x_start,
+        x_noise,
+        ms2_cond=None,
+        ms1_cond=None,
         num_steps=1000,
         plot_type="peakmap",
         plot_3d=True,
@@ -614,7 +628,9 @@ class ModelInterface(object):
                 "pyopenms_viz is required for plotting. Install it with `pip install pyopenms_viz`."
             )
 
-        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps)
+        pred, pred_noise = self._predict_one_batch(
+            x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+        )
 
         pred_noise_df = self._ms2_mesh_to_df(pred_noise)
         pred_noise_plot = pred_noise_df.plot(
@@ -650,7 +666,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_mesh_df = self._ms2_mesh_to_df(ms2_1)
+        ms2_mesh_df = self._ms2_mesh_to_df(x_start)
         ms2_target_plot = ms2_mesh_df.plot(
             x="y",
             y="x",
@@ -667,7 +683,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_noise_mesh_df = self._ms2_mesh_to_df(ms2_2)
+        ms2_noise_mesh_df = self._ms2_mesh_to_df(x_noise)
         ms2_noise_plot = ms2_noise_mesh_df.plot(
             x="y",
             y="x",
@@ -701,7 +717,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms1_df = self._ms1_to_df(ms1_1.unsqueeze(0))
+        ms1_df = self._ms1_to_df(ms1_cond.unsqueeze(0))
         ms1_plot = ms1_df.plot(
             kind="chromatogram",
             x="y",
@@ -769,8 +785,16 @@ class ModelInterface(object):
         for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
             x_start, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
-            ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(self.device).unsqueeze(0)
-            loss = self._train_one_batch(x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, noise=None, ms1_loss_weight=self.ms1_loss_weight)
+            ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
+                self.device
+            ).unsqueeze(0)
+            loss = self._train_one_batch(
+                x_start,
+                ms2_cond=ms2_cond,
+                ms1_cond=ms1_cond,
+                noise=None,
+                ms1_loss_weight=self.ms1_loss_weight,
+            )
             batch_loss.append(loss)
 
             if self.use_wandb:
@@ -778,10 +802,18 @@ class ModelInterface(object):
 
         return batch_loss
 
-    def _train_one_batch(self, x_start, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
+    def _train_one_batch(
+        self, x_start, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0
+    ):
         """Train one batch"""
         self.optimizer.zero_grad()
-        loss = self.train_step(x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, noise=noise, ms1_loss_weight=ms1_loss_weight)
+        loss = self.train_step(
+            x_start,
+            ms2_cond=ms2_cond,
+            ms1_cond=ms1_cond,
+            noise=noise,
+            ms1_loss_weight=ms1_loss_weight,
+        )
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
@@ -791,7 +823,9 @@ class ModelInterface(object):
         """Predict one batch"""
         self.model.eval()
         with torch.no_grad():
-            sample, pred_noise = self.sample(x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps)
+            sample, pred_noise = self.sample(
+                x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+            )
         return sample[0].cpu().detach().numpy(), pred_noise[0].cpu().detach().numpy()
 
     @staticmethod
