@@ -309,7 +309,7 @@ class ModelInterface(object):
             )
 
             self.save_checkpoint(
-                None,
+                lr_scheduler,
                 epoch,
                 np.mean(batch_loss),
                 f"{os.path.dirname(checkpoint_path)}{os.path.sep}dquartic_latest_checkpoint.ckpt",
