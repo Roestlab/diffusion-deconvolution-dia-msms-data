@@ -490,7 +490,7 @@ class UNet1d(Module):
                 )
             )
 
-        downsampled_n = downsample_dim / (len(dim_mults) - 1)
+        downsampled_n = downsample_dim // (2 ** (len(dim_mults) - 1))
         mid_dim = dims[-1]
         self.mid_block1 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
         self.mid_attn = (
