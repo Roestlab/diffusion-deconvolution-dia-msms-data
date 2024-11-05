@@ -174,6 +174,8 @@ class DDIMDiffusionModel(ModelInterface):
             ms1_cond: The clean MS1 data maps.
             num_steps: Number of sampling steps.
         """
+        ms2_cond = self.normalize(ms2_cond) if ms2_cond is not None else None
+        ms1_cond = self.normalize(ms1_cond) if ms1_cond is not None else None
         pred_noise = None
         time_steps = torch.linspace(self.num_timesteps - 1, 0, num_steps, dtype=torch.long)
 
@@ -184,7 +186,7 @@ class DDIMDiffusionModel(ModelInterface):
         x_t, pred_noise = self.unnormalize(x_t), self.unnormalize(pred_noise)
 
         if ms2_cond is not None:
-            pred_noise = ms2_cond - x_t
+            pred_noise = self.unnormalize(ms2_cond) - x_t
 
         return x_t, pred_noise
 
@@ -204,6 +206,8 @@ class DDIMDiffusionModel(ModelInterface):
         noise = torch.randn_like(x_0, device=self.device) if noise is None else noise
 
         x_0 = self.normalize(x_0)
+        ms2_cond = self.normalize(ms2_cond)
+        ms1_cond = self.normalize(ms1_cond)
         x_t = self.q_sample(x_0, t, noise=noise)
         primary_loss, additional_loss = torch.zeros((batch_size,), device=self.device), torch.zeros(
             (batch_size,), device=self.device
