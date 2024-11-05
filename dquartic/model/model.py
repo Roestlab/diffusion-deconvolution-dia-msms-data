@@ -87,9 +87,9 @@ class DDIMDiffusionModel(ModelInterface):
             get_linear_beta_schedule(num_timesteps).to(device)
             if beta_schedule_type == "linear"
             else get_cosine_beta_schedule(num_timesteps).to(device)
-        )
-        self.alphas = get_alphas(self.betas)
-        self.alpha_bars = get_alpha_bars(self.alphas)
+        ).to(torch.float32)
+        self.alphas = get_alphas(self.betas).to(torch.float32)
+        self.alpha_bars = get_alpha_bars(self.alphas).to(torch.float32)
 
         # calculate loss weight
 
