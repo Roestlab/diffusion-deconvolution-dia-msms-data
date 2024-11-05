@@ -586,12 +586,12 @@ class UNet1d(Module):
 
             x = downsample(x)
 
-        _, _, n = x.shape
-        x = rearrange(x, "(b rt) d mz -> b (d mz) rt", b=b, rt=c, mz=n)
+        _, _, n_downsampled = x.shape
+        x = rearrange(x, "(b rt) d mz -> b (d mz) rt", b=b, rt=c, mz=n_downsampled)
         x = self.mid_block1(x, t)
         x = self.mid_attn(x, cond=attn_cond)
         x = self.mid_block2(x, t)
-        x = rearrange(x, "b (d mz) rt -> (b rt) d mz", b=b, rt=c, mz=n)
+        x = rearrange(x, "b (d mz) rt -> (b rt) d mz", b=b, rt=c, mz=n_downsampled)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
