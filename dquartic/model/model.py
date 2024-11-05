@@ -203,11 +203,13 @@ class DDIMDiffusionModel(ModelInterface):
         """
         batch_size = x_0.size(0)
         t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
-        noise = torch.randn_like(x_0, device=self.device) if noise is None else noise
+        noise = (
+            torch.randn_like(x_0, device=self.device) if noise is None else self.normalize(noise)
+        )
 
         x_0 = self.normalize(x_0)
-        ms2_cond = self.normalize(ms2_cond)
-        ms1_cond = self.normalize(ms1_cond)
+        ms2_cond = self.normalize(ms2_cond) if ms2_cond is not None else None
+        ms1_cond = self.normalize(ms1_cond) if ms1_cond is not None else None
         x_t = self.q_sample(x_0, t, noise=noise)
         primary_loss, additional_loss = torch.zeros((batch_size,), device=self.device), torch.zeros(
             (batch_size,), device=self.device
