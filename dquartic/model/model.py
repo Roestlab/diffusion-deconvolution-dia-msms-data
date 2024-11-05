@@ -230,8 +230,6 @@ class DDIMDiffusionModel(ModelInterface):
                     additional_loss = additional_loss + F.mse_loss(
                         sic / torch.max(sic), ms1_sic / torch.max(ms1_sic)
                     )
-            else:
-                additional_loss = 0.0
         elif self.pred_type == "x0":
             # Predict x0
             x0_pred = self.model(x_t, t, ms2_cond, ms1_cond)

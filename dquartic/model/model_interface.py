@@ -475,9 +475,9 @@ class ModelInterface(object):
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
             x_0, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
-            ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (ms2_2 * mixture_weights[1]).to(
-                self.device
-            )
+            ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (
+                ms2_2 * mixture_weights[1]
+            ).to(self.device)
             pred, _ = self._predict_one_batch(
                 x_0, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
             )
