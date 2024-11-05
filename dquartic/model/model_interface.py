@@ -241,13 +241,13 @@ class ModelInterface(object):
         """
         return np.sum([p.numel() for p in self.model.parameters()])
 
-    def train_step(self, x_start, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
+    def train_step(self, x_0, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step. Implemented in the subclass.
         """
         raise NotImplementedError
 
-    def sample(self, x_start, ms2_cond=None, ms1_cond=None, num_steps=1000):
+    def sample(self, x_t, ms2_cond=None, ms1_cond=None, num_steps=1000):
         """
         Generate samples from the model. Implemented in the subclass.
         """
@@ -473,19 +473,19 @@ class ModelInterface(object):
         self.model.eval()
         preds = np.array([])
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
-            x_start, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
+            x_0, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
             ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
                 self.device
             ).unsqueeze(0)
             pred, _ = self._predict_one_batch(
-                x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+                x_0, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
             )
-            # Store ms2_1, ms1_1, x_start_rand, pred
+            # Store ms2_1, ms1_1, mixture, pred
             pred_data = {
                 "ms2_1": ms2_1,
                 "ms1_1": ms1_1,
-                "x_start_rand": ms2_cond.cpu().detach().numpy(),
+                "mixture": ms2_cond.cpu().detach().numpy(),
                 "pred": pred,
             }
             preds = np.append(preds, pred_data)
@@ -522,7 +522,7 @@ class ModelInterface(object):
             sample_idx = np.random.randint(len(dataloader.dataset))
 
         ms2_1, ms1_1, ms2_2, _ = dataloader.dataset[sample_idx]
-        x_start, ms1_cond = ms2_1.to(self.device).unsqueeze(0), ms1_1.to(self.device).unsqueeze(0)
+        x_0, ms1_cond = ms2_1.to(self.device).unsqueeze(0), ms1_1.to(self.device).unsqueeze(0)
 
         # Simulated mixed spectra from target sample and other sample
         ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
@@ -539,7 +539,7 @@ class ModelInterface(object):
                 pred_noise_plot,
                 pred_plot,
             ) = self.plot_single_prediction(
-                x_start,
+                x_0,
                 ms2_2,
                 ms2_cond=ms2_cond,
                 ms1_cond=ms1_cond,
@@ -599,7 +599,7 @@ class ModelInterface(object):
 
     def plot_single_prediction(
         self,
-        x_start,
+        x_0,
         x_noise,
         ms2_cond=None,
         ms1_cond=None,
@@ -629,7 +629,7 @@ class ModelInterface(object):
             )
 
         pred, pred_noise = self._predict_one_batch(
-            x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+            x_0, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
         )
 
         pred_noise_df = self._ms2_mesh_to_df(pred_noise)
@@ -666,7 +666,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_mesh_df = self._ms2_mesh_to_df(x_start)
+        ms2_mesh_df = self._ms2_mesh_to_df(x_0)
         ms2_target_plot = ms2_mesh_df.plot(
             x="y",
             y="x",
@@ -783,13 +783,13 @@ class ModelInterface(object):
         self.model.train()
         batch_loss = []
         for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
-            x_start, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
+            x_0, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
             ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
                 self.device
             ).unsqueeze(0)
             loss = self._train_one_batch(
-                x_start,
+                x_0,
                 ms2_cond=ms2_cond,
                 ms1_cond=ms1_cond,
                 noise=None,
@@ -802,13 +802,11 @@ class ModelInterface(object):
 
         return batch_loss
 
-    def _train_one_batch(
-        self, x_start, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0
-    ):
+    def _train_one_batch(self, x_0, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
         """Train one batch"""
         self.optimizer.zero_grad()
         loss = self.train_step(
-            x_start,
+            x_0,
             ms2_cond=ms2_cond,
             ms1_cond=ms1_cond,
             noise=noise,
@@ -819,12 +817,12 @@ class ModelInterface(object):
         self.optimizer.step()
         return loss.item()
 
-    def _predict_one_batch(self, x_start, ms2_cond=None, ms1_cond=None, num_steps=1000):
+    def _predict_one_batch(self, x_0, ms2_cond=None, ms1_cond=None, num_steps=1000):
         """Predict one batch"""
         self.model.eval()
         with torch.no_grad():
             sample, pred_noise = self.sample(
-                x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+                torch.randn_like(x_0), ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
             )
         return sample[0].cpu().detach().numpy(), pred_noise[0].cpu().detach().numpy()
 

@@ -15,16 +15,16 @@ def get_linear_beta_schedule(num_timesteps, beta_start=0.0001, beta_end=0.02):
     """
     Returns a linear beta schedule for the diffusion process.
     """
-    return torch.linspace(beta_start, beta_end, num_timesteps, dtype = torch.float64)
+    return torch.linspace(beta_start, beta_end, num_timesteps, dtype=torch.float64)
 
 
-def get_cosine_beta_schedule(num_timesteps, s = 0.008):
+def get_cosine_beta_schedule(num_timesteps, s=0.008):
     """
     Cosine beta schedule
     as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
     """
     steps = num_timesteps + 1
-    x = torch.linspace(0, num_timesteps, steps, dtype = torch.float64)
+    x = torch.linspace(0, num_timesteps, steps, dtype=torch.float64)
     alphas_cumprod = torch.cos(((x / num_timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
@@ -83,7 +83,11 @@ class DDIMDiffusionModel(ModelInterface):
 
         # Define beta schedule and compute alpha and alpha_bar
 
-        self.betas = get_linear_beta_schedule(num_timesteps).to(device) if beta_schedule_type == "linear" else get_cosine_beta_schedule(num_timesteps).to(device)
+        self.betas = (
+            get_linear_beta_schedule(num_timesteps).to(device)
+            if beta_schedule_type == "linear"
+            else get_cosine_beta_schedule(num_timesteps).to(device)
+        )
         self.alphas = get_alphas(self.betas)
         self.alpha_bars = get_alpha_bars(self.alphas)
 
@@ -108,17 +112,14 @@ class DDIMDiffusionModel(ModelInterface):
         self.pred_type = pred_type
         self.ms1_loss_weight = ms1_loss_weight
 
-    def q_sample(self, x_start, t, noise=None):
+    def q_sample(self, x_0, t, noise=None):
         """
         Sample from q(x_t | x_0)
         """
-        if noise is None:
-            noise = torch.randn_like(x_start)
-
         sqrt_alpha_bar_t = torch.sqrt(self.alpha_bars[t])[:, None, None]
         sqrt_one_minus_alpha_bar_t = torch.sqrt(1.0 - self.alpha_bars[t])[:, None, None]
 
-        return sqrt_alpha_bar_t * x_start + sqrt_one_minus_alpha_bar_t * noise
+        return sqrt_alpha_bar_t * x_0 + sqrt_one_minus_alpha_bar_t * noise
 
     def p_sample(self, x_t, t, init_cond=None, attn_cond=None):
         """
@@ -163,19 +164,17 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t_prev, eps_pred
 
-    def sample(self, x, ms2_cond=None, ms1_cond=None, num_steps=1000):
+    def sample(self, x_t, ms2_cond=None, ms1_cond=None, num_steps=1000):
         """
         Generate samples from the model.
 
         Args:
-            x: Initial input tensor.
+            x_t: Initial input tensor.
             ms2_cond: The MS2 mixture data maps.
             ms1_cond: The clean MS1 data maps.
             num_steps: Number of sampling steps.
         """
-        x_t = x
         pred_noise = None
-
         time_steps = torch.linspace(self.num_timesteps - 1, 0, num_steps, dtype=torch.long)
 
         for t in time_steps:
@@ -183,26 +182,32 @@ class DDIMDiffusionModel(ModelInterface):
             x_t, pred_noise = self.p_sample(x_t, t.item(), ms2_cond, ms1_cond)
 
         x_t, pred_noise = self.unnormalize(x_t), self.unnormalize(pred_noise)
+
+        if ms2_cond is not None:
+            pred_noise = ms2_cond - x_t
+
         return x_t, pred_noise
 
-    def train_step(self, x_start, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
+    def train_step(self, x_0, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step.
 
         Args:
-            x_start: The clean MS2 data maps (x0).
+            x_0: The clean MS2 data maps (x0).
             ms2_cond: The MS2 mixture data maps.
             ms1_cond: The clean MS1 data maps.
             noise: Optional noise tensor. If None, it will be sampled randomly.
             ms1_loss_weight: Weight for the additional loss component.
         """
-        batch_size = x_start.size(0)
+        batch_size = x_0.size(0)
         t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
+        noise = torch.randn_like(x_0, device=self.device) if noise is None else noise
 
-        noise = torch.randn_like(x_start) if noise is None else noise
-        x_start = self.normalize(x_start)
-        x_t = self.q_sample(x_start, t, noise)
-        primary_loss, additional_loss = torch.zeros((batch_size,), device=self.device), torch.zeros((batch_size,), device=self.device)
+        x_0 = self.normalize(x_0)
+        x_t = self.q_sample(x_0, t, noise=noise)
+        primary_loss, additional_loss = torch.zeros((batch_size,), device=self.device), torch.zeros(
+            (batch_size,), device=self.device
+        )
 
         if self.pred_type == "eps":
             # Predict noise
@@ -216,14 +221,16 @@ class DDIMDiffusionModel(ModelInterface):
                 for func in (torch.sum, torch.mean, torch.max):
                     sic = func(x_t - eps_pred, dim=-1)
                     ms1_sic = func(ms1_cond, dim=-1)
-                    additional_loss = additional_loss + F.mse_loss(sic / torch.max(sic), ms1_sic / torch.max(ms1_sic))
+                    additional_loss = additional_loss + F.mse_loss(
+                        sic / torch.max(sic), ms1_sic / torch.max(ms1_sic)
+                    )
             else:
                 additional_loss = 0.0
         elif self.pred_type == "x0":
             # Predict x0
             x0_pred = self.model(x_t, t, ms2_cond, ms1_cond)
             # Compute primary loss between predicted x0 and true x0
-            primary_loss = F.mse_loss(x0_pred, x_start)
+            primary_loss = F.mse_loss(x0_pred, x_0)
 
             # Additional loss term
             if ms1_loss_weight > 0.0:
@@ -231,14 +238,26 @@ class DDIMDiffusionModel(ModelInterface):
                 for func in (torch.sum, torch.mean, torch.max):
                     sic = func(x0_pred, dim=-1)
                     ms1_sic = func(ms1_cond, dim=-1)
-                    additional_loss = additional_loss + F.mse_loss(sic / torch.max(sic), ms1_sic / torch.max(ms1_sic))
+                    additional_loss = additional_loss + F.mse_loss(
+                        sic / torch.max(sic), ms1_sic / torch.max(ms1_sic)
+                    )
         else:
             raise ValueError(f"Unknown pred_type: {self.pred_type}")
 
         # Combine primary loss and additional loss
-        primary_loss = reduce(primary_loss, "b ... -> b", "mean") if primary_loss.dim() > 1 else primary_loss
-        additional_loss = reduce(additional_loss, "b ... -> b", "mean") if additional_loss.dim() > 1 else additional_loss
-        loss = (1 - ms1_loss_weight) * primary_loss + ms1_loss_weight * additional_loss if ms1_loss_weight > 0.0 else primary_loss
+        primary_loss = (
+            reduce(primary_loss, "b ... -> b", "mean") if primary_loss.dim() > 1 else primary_loss
+        )
+        additional_loss = (
+            reduce(additional_loss, "b ... -> b", "mean")
+            if additional_loss.dim() > 1
+            else additional_loss
+        )
+        loss = (
+            (1 - ms1_loss_weight) * primary_loss + ms1_loss_weight * additional_loss
+            if ms1_loss_weight > 0.0
+            else primary_loss
+        )
         loss = loss * extract(self.loss_weight, t, loss.shape)
 
         return loss
