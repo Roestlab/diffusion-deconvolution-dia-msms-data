@@ -475,9 +475,9 @@ class ModelInterface(object):
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
             x_start, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
-            ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
+            ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (ms2_2 * mixture_weights[1]).to(
                 self.device
-            ).unsqueeze(0)
+            )
             pred, _ = self._predict_one_batch(
                 x_start, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
             )
@@ -522,12 +522,12 @@ class ModelInterface(object):
             sample_idx = np.random.randint(len(dataloader.dataset))
 
         ms2_1, ms1_1, ms2_2, _ = dataloader.dataset[sample_idx]
-        x_start, ms1_cond = ms2_1.to(self.device).unsqueeze(0), ms1_1.to(self.device).unsqueeze(0)
+        x_start, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
 
         # Simulated mixed spectra from target sample and other sample
-        ms2_cond = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1]).to(
+        ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (ms2_2 * mixture_weights[1]).to(
             self.device
-        ).unsqueeze(0)
+        )
 
         for _num_steps in num_steps:
             # Get sample and prediction
@@ -787,7 +787,7 @@ class ModelInterface(object):
             # Simulated mixed spectra from target sample and other sample
             ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (
                 ms2_2 * mixture_weights[1]
-            ).to(self.device).unsqueeze(0)
+            ).to(self.device)
             loss = self._train_one_batch(
                 x_start,
                 ms2_cond=ms2_cond,
