@@ -554,7 +554,7 @@ class UNet1d(Module):
         x = (
             rearrange(x, "b rt mz -> (b rt) () mz")
             if x.dim() == 3
-            else rearrange(x, "rt mz -> () rt mz")
+            else rearrange(x, "rt mz -> rt () mz")
         )
 
         if self.conditional:
@@ -562,7 +562,7 @@ class UNet1d(Module):
             init_cond = (
                 rearrange(init_cond, "b rt mz -> (b rt) () mz")
                 if init_cond.dim() == 3
-                else rearrange(init_cond, "rt mz -> b rt () mz", b=b)
+                else rearrange(init_cond, "rt mz -> rt () mz")
             )
             x = torch.cat((init_cond, x), dim=1)
 
