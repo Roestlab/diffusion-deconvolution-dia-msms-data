@@ -142,7 +142,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         if self.pred_type == "eps":
             # Predict noise
-            eps_pred = self.model(x_t, t_tensor, t_tensor, init_cond, attn_cond)
+            eps_pred = self.model(x_t, t_tensor, init_cond, attn_cond)
             # Compute x_0 prediction
             x0_pred = (x_t - sqrt_one_minus_alpha_bar_t * eps_pred) / sqrt_alpha_bar_t
         elif self.pred_type == "x0":
