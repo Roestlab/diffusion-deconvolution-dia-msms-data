@@ -490,15 +490,15 @@ class UNet1d(Module):
                 )
             )
 
-        downsampled_n = downsample_dim // (2 ** (len(dim_mults) - 1))
+        self.downsampled_n = downsample_dim // (2 ** (len(dim_mults) - 1))
         mid_dim = dims[-1]
-        self.mid_block1 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
+        self.mid_block1 = resnet_block(mid_dim * self.downsampled_n, mid_dim * self.downsampled_n)
         self.mid_attn = (
             Residual(
                 PreNorm(
-                    mid_dim * downsampled_n,
+                    mid_dim * self.downsampled_n,
                     Attention(
-                        mid_dim * downsampled_n,
+                        mid_dim * self.downsampled_n,
                         heads=attn_heads,
                         dim_head=attn_dim_head,
                         use_xattn=self.conditional,
@@ -509,9 +509,9 @@ class UNet1d(Module):
             if simple
             else Residual(
                 PreNorm(
-                    mid_dim * downsampled_n,
+                    mid_dim * self.downsampled_n,
                     Transformer1d(
-                        mid_dim * downsampled_n,
+                        mid_dim * self.downsampled_n,
                         depth=tfer_depth,
                         heads=attn_heads,
                         dim_head=attn_dim_head,
@@ -521,7 +521,7 @@ class UNet1d(Module):
                 )
             )
         )
-        self.mid_block2 = resnet_block(mid_dim * downsampled_n, mid_dim * downsampled_n)
+        self.mid_block2 = resnet_block(mid_dim * self.downsampled_n, mid_dim * self.downsampled_n)
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
             is_last = ind == (len(in_out) - 1)
@@ -550,12 +550,20 @@ class UNet1d(Module):
         self.final_act = nn.Softplus() if pos_output_only else nn.Identity()
 
     def forward(self, x, time, init_cond=None, attn_cond=None):
-        b, c, n = x.shape
-        x = rearrange(x, "b rt mz -> (b rt) () mz", b=b, rt=c, mz=n)
+        b = x.shape[0] if x.dim() == 3 else 1
+        x = (
+            rearrange(x, "b rt mz -> (b rt) () mz")
+            if x.dim() == 3
+            else rearrange(x, "rt mz -> () rt mz")
+        )
 
         if self.conditional:
             init_cond = default(init_cond, lambda: torch.zeros_like(x))
-            init_cond = rearrange(init_cond, "b rt mz -> (b rt) () mz", b=b, rt=c, mz=n)
+            init_cond = (
+                rearrange(init_cond, "b rt mz -> (b rt) () mz")
+                if init_cond.dim() == 3
+                else rearrange(init_cond, "rt mz -> b rt () mz", b=b)
+            )
             x = torch.cat((init_cond, x), dim=1)
 
         x = self.init_conv(x)
@@ -586,12 +594,11 @@ class UNet1d(Module):
 
             x = downsample(x)
 
-        _, _, n_downsampled = x.shape
-        x = rearrange(x, "(b rt) d mz -> b (d mz) rt", b=b, rt=c, mz=n_downsampled)
+        x = rearrange(x, "(b rt) d mz -> b (d mz) rt", b=b)
         x = self.mid_block1(x, t)
         x = self.mid_attn(x, cond=attn_cond)
         x = self.mid_block2(x, t)
-        x = rearrange(x, "b (d mz) rt -> (b rt) d mz", b=b, rt=c, mz=n_downsampled)
+        x = rearrange(x, "b (d mz) rt -> (b rt) d mz", mz=self.downsampled_n)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
@@ -607,5 +614,5 @@ class UNet1d(Module):
 
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
-        x = rearrange(x, "(b rt) d mz -> b (rt d) mz", b=b, rt=c, mz=n)
+        x = rearrange(x, "(b rt) d mz -> b (rt d) mz", b=b)
         return self.final_act(x)
