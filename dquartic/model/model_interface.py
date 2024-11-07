@@ -874,7 +874,7 @@ class ModelInterface(object):
         ms2_df = pd.DataFrame()
         for i in range(batch_ms2.shape[0]):
             sample = batch_ms2[i]
-            df = pd.DataFrame(sample.numpy())
+            df = pd.DataFrame(sample)
             df["sample_id"] = i
             df = df.melt(id_vars=["sample_id"], var_name="x", value_name="intensity")
             df["y"] = df.index % 34
@@ -887,7 +887,7 @@ class ModelInterface(object):
         ms1_df = pd.DataFrame()
         for i in range(batch_ms1.shape[0]):
             sample = batch_ms1[i]
-            df = pd.DataFrame(sample.numpy().reshape(1, -1))
+            df = pd.DataFrame(sample.reshape(1, -1))
             df["sample_id"] = i
             df = df.melt(id_vars=["sample_id"], var_name="y", value_name="intensity")
             ms1_df = pd.concat([ms1_df, df], ignore_index=True)
