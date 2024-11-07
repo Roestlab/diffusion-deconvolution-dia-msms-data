@@ -483,10 +483,10 @@ class ModelInterface(object):
             )
             # Store ms2_1, ms1_1, mixture, pred
             pred_data = {
-                "ms2_1": ms2_1,
-                "ms1_1": ms1_1,
+                "ms2_1": ms2_1.cpu().detach().numpy(),
+                "ms1_1": ms1_1.cpu().detach().numpy(),
                 "mixture": ms2_cond.cpu().detach().numpy(),
-                "pred": pred,
+                "pred": pred.cpu().detach().numpy(),
             }
             preds = np.append(preds, pred_data)
         return preds
@@ -527,7 +527,7 @@ class ModelInterface(object):
         # Simulated mixed spectra from target sample and other sample
         ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (ms2_2 * mixture_weights[1]).to(
             self.device
-        )
+        ).unsqueeze(0)
 
         for _num_steps in num_steps:
             # Get sample and prediction
@@ -540,7 +540,7 @@ class ModelInterface(object):
                 pred_plot,
             ) = self.plot_single_prediction(
                 x_0,
-                ms2_2.to(self.device).unsqueeze(0),
+                ms2_2,
                 ms2_cond=ms2_cond,
                 ms1_cond=ms1_cond,
                 num_steps=_num_steps,
@@ -631,10 +631,21 @@ class ModelInterface(object):
         pred, pred_noise = self._predict_one_batch(
             x_0, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
         )
+        x_0 = x_0.squeeze(0).cpu().detach().numpy()
+        x_noise = x_noise.cpu().detach().numpy()
+        ms2_cond = ms2_cond.squeeze(0).cpu().detach().numpy()
+        ms1_shape = None
 
-        pred_noise_df = self._ms2_mesh_to_df(
-            pred_noise if pred_noise.dim() == 2 else pred_noise.squeeze(0)
-        )
+        if ms1_cond.dim() <= 2:
+            ms1_shape = "1d"
+        elif ms1_cond.dim() == 3:
+            ms1_shape = "2d"
+        else:
+            raise ValueError(f"Unknown ms1_cond shape: {ms1_cond.shape}")
+
+        ms1_cond = ms1_cond.squeeze(0).cpu().detach().numpy()
+
+        pred_noise_df = self._ms2_mesh_to_df(pred_noise)
         pred_noise_plot = pred_noise_df.plot(
             x="y",
             y="x",
@@ -651,7 +662,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        pred_df = self._ms2_mesh_to_df(pred if pred.dim() == 2 else pred.squeeze(0))
+        pred_df = self._ms2_mesh_to_df(pred)
         pred_plot = pred_df.plot(
             x="y",
             y="x",
@@ -668,7 +679,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_mesh_df = self._ms2_mesh_to_df(x_0 if x_0.dim() == 2 else x_0.squeeze(0))
+        ms2_mesh_df = self._ms2_mesh_to_df(x_0)
         ms2_target_plot = ms2_mesh_df.plot(
             x="y",
             y="x",
@@ -685,9 +696,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_noise_mesh_df = self._ms2_mesh_to_df(
-            x_noise if x_noise.dim() == 2 else x_noise.squeeze(0)
-        )
+        ms2_noise_mesh_df = self._ms2_mesh_to_df(x_noise)
         ms2_noise_plot = ms2_noise_mesh_df.plot(
             x="y",
             y="x",
@@ -704,9 +713,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_input_mesh_df = self._ms2_mesh_to_df(
-            ms2_cond if ms2_cond.dim() == 2 else ms2_cond.squeeze(0)
-        )
+        ms2_input_mesh_df = self._ms2_mesh_to_df(ms2_cond)
         ms2_input_plot = ms2_input_mesh_df.plot(
             x="y",
             y="x",
@@ -723,8 +730,8 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        if ms1_cond.dim() <= 2:
-            ms1_df = self._ms1_to_df(ms1_cond if ms1_cond.dim() == 1 else ms1_cond.squeeze(0))
+        if ms1_shape == "1d":
+            ms1_df = self._ms1_to_df(ms1_cond)
             ms1_plot = ms1_df.plot(
                 kind="chromatogram",
                 x="y",
@@ -738,8 +745,8 @@ class ModelInterface(object):
                 show_plot=False,
                 backend=backend,
             )
-        else:
-            ms1_df = self._ms2_to_df(ms1_cond if ms1_cond.dim() == 2 else ms1_cond.squeeze(0))
+        elif ms1_shape == "2d":
+            ms1_df = self._ms2_to_df(ms1_cond)
             ms1_plot = ms1_df.plot(
                 x="y",
                 y="x",
