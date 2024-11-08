@@ -33,7 +33,8 @@ def exists(x):
 
 def default(val, d):
     if exists(val):
-        return val
+        return
+
     return d() if callable(d) else d
 
 
@@ -43,9 +44,12 @@ def once(fn):
     @wraps(fn)
     def inner(x):
         nonlocal called
+
         if called:
             return
+
         called = True
+
         return fn(x)
 
     return inner
@@ -94,6 +98,7 @@ class PreNorm(Module):
 
     def forward(self, x, *args, **kwargs):
         x = self.norm(x)
+
         return self.fn(x, *args, **kwargs)
 
 
@@ -113,6 +118,7 @@ class SinusoidalPosEmb(Module):
         emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
         emb = x[:, None] * emb[None, :]
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+
         return emb
 
 
@@ -136,6 +142,7 @@ class Block(Module):
             x = x * (scale + 1) + shift
 
         x = self.act(x)
+
         return self.dropout(x)
 
 
@@ -153,8 +160,8 @@ class ResnetBlock(Module):
         self.res_conv = nn.Conv1d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb=None):
-
         scale_shift = None
+
         if exists(self.mlp) and exists(time_emb):
             time_emb = self.mlp(time_emb)
             time_emb = rearrange(time_emb, "b c -> b c 1")
@@ -170,7 +177,7 @@ class ResnetBlock(Module):
 # attention
 
 
-class Attend(nn.Module):
+class Attend(Module):
     def __init__(self, dropout=0.0, flash=False, scale=None):
         super().__init__()
         self.dropout = dropout
@@ -278,6 +285,7 @@ class LinearAttention(Module):
 
         out = torch.einsum("b h d e, b h d n -> b h e n", context, q)
         out = rearrange(out, "b h c n -> b (h c) n", h=self.heads)
+
         return self.to_out(out)
 
 
@@ -315,13 +323,68 @@ class Attention(Module):
         out = self.attend(q, k, v)
 
         out = rearrange(out, "b h n d -> b (h d) n")
+
+        return self.to_out(out)
+
+
+class HybridSelfAndCrossAttention(Module):
+    def __init__(self, dim, heads=4, dim_head=32, flash=False, cond_dim=1):
+        super().__init__()
+        self.heads = heads
+        hidden_dim = dim_head * heads
+
+        self.rotary_emb = RotaryEmbedding(dim=dim_head // 2)
+
+        self.attend = Attend(flash=flash)
+
+        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias=False)
+        self.to_qv = nn.Conv1d(dim, hidden_dim * 2, 1, bias=False)
+        self.to_k = nn.Conv1d(cond_dim, hidden_dim, 1, bias=False)
+
+        self.to_mid = nn.Conv1d(hidden_dim, dim, 1)
+
+        self.to_out = nn.Conv1d(hidden_dim, dim, 1)
+
+    def forward(self, x, cond):
+        qkv = self.to_qkv(x).chunk(3, dim=1)
+        q, k, v = map(lambda t: rearrange(t, "b (h c) n -> b h n c", h=self.heads), qkv)
+
+        q = self.rotary_emb.rotate_queries_or_keys(q)
+        k = self.rotary_emb.rotate_queries_or_keys(k)
+
+        x = self.attend(q, k, v)
+        x = rearrange(x, "b h n d -> b (h d) n")
+
+        mid = self.to_mid(x)
+
+        qv = self.to_qv(mid).chunk(2, dim=1)
+        q, v = map(lambda t: rearrange(t, "b (h c) n -> b h n c", h=self.heads), qv)
+        k = rearrange(self.to_k(cond), "b (h c) n -> b h n c", h=self.heads)
+
+        q = self.rotary_emb.rotate_queries_or_keys(q)
+        k = self.rotary_emb.rotate_queries_or_keys(k)
+
+        out = self.attend(q, k, v)
+        out = rearrange(out, "b h n d -> b (h d) n")
+
         return self.to_out(out)
 
 
 # embedding model and helper classes
 
 
-class LayerNorm1d(nn.Module):
+class ConditionalScaleShift(Module):
+    def __init__(self, time_emb_dim, dim):
+        super().__init__()
+        self.to_scale_shift = nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim * 2))
+
+    def forward(self, x, t):
+        scale, shift = self.to_scale_shift(t).chunk(2, dim=-1)
+
+        return x * (scale + 1) + shift
+
+
+class LayerNorm1d(Module):
     def __init__(self, channels, *, bias=True, eps=1e-5):
         super().__init__()
         self.bias = bias
@@ -333,10 +396,11 @@ class LayerNorm1d(nn.Module):
         var = torch.var(x, dim=1, unbiased=False, keepdim=True)
         mean = torch.mean(x, dim=1, keepdim=True)
         norm = (x - mean) * (var + self.eps).rsqrt() * self.g
+
         return norm + self.b if self.bias else norm
 
 
-class FeedForward1d(nn.Module):
+class FeedForward1d(Module):
     def __init__(self, channels, ch_mult=2):
         self.net = nn.Sequential(
             LayerNorm1d(channels=channels),
@@ -349,34 +413,66 @@ class FeedForward1d(nn.Module):
         return self.net(x)
 
 
-class Transformer1d(nn.Module):
+class Transformer1d(Module):
     def __init__(
-        self, dim, depth=6, heads=4, dim_head=32, mlp_dim=None, use_xattn=False, cond_dim=1
+        self, dim, depth=4, heads=4, dim_head=32, mlp_dim=None, use_xattn=False, cond_dim=1
     ):
         super().__init__()
-        self.layers = nn.ModuleList([])
+        self.layers = ModuleList([])
         for i in range(depth):
-            use_xattn_layer = use_xattn if i < depth // 2 else False
-            cond_dim_layer = cond_dim if i < depth // 2 else None
-            self.layers.append(
-                nn.ModuleList(
-                    [
-                        Attention(
-                            dim,
-                            heads=heads,
-                            dim_head=dim_head,
-                            use_xattn=use_xattn_layer,
-                            cond_dim=cond_dim_layer,
-                        ),
-                        FeedForward1d(dim, default(mlp_dim, dim * 2)),
-                    ]
+            if i < depth // 2 or not use_xattn:
+                self.layers.append(
+                    ModuleList(
+                        [
+                            Attention(
+                                dim,
+                                heads=heads,
+                                dim_head=dim_head,
+                            ),
+                            FeedForward1d(dim, default(mlp_dim, dim * 2)),
+                        ]
+                    )
                 )
-            )
+            elif use_xattn:
+                self.layers.append(
+                    ModuleList(
+                        [
+                            HybridSelfAndCrossAttention(
+                                dim,
+                                heads=heads,
+                                dim_head=dim_head,
+                                cond_dim=cond_dim,
+                            ),
+                            FeedForward1d(dim, default(mlp_dim, dim * 2)),
+                        ]
+                    )
+                )
 
     def forward(self, x, cond=None):
         for attn, ra1, ff, ra2 in self.layers:
             x = attn(x, cond=cond) + x
             x = ra2(ff(ra1(x))) + x
+
+        return x
+
+
+# Fourier Space
+
+
+class FourierFeatures(Module):
+    def __init__(self, dim, h=10000, w=34):
+        super().__init__()
+        self.complex_weight = nn.Parameter(torch.randn(dim, h, w, 2) * 0.02)
+        self.h = h
+        self.w = w
+
+    def forward(self, x):
+        _, _, h, w = x.shape
+        x = torch.fft.rfft2(x, dim=(2, 3), norm="ortho")
+        weight = torch.view_as_complex(self.complex_weight)
+        x = x * weight
+        x = torch.fft.irfft2(x, s=(h, w), dim=(2, 3), norm="ortho")
+
         return x
 
 
@@ -401,7 +497,7 @@ class UNet1d(Module):
         attn_heads=4,
         attn_dim_head=32,
         tfer_dim_mult=620,
-        tfer_depth=6,
+        tfer_depth=4,
         downsample_dim=40000,
         simple=True,
         pos_output_only=False,
@@ -430,9 +526,12 @@ class UNet1d(Module):
 
         resnet_block = partial(ResnetBlock, time_emb_dim=time_dim, dropout=dropout)
 
-        # attn conditioning signal
+        # conditioning signals
 
         if self.conditional:
+            self.init_cond_proj = ConditionalScaleShift(
+                time_emb_dim=time_dim, dim=init_cond_channels
+            )
             attn_cond_init_dim = default(attn_cond_init_dim, dim * 2)
             self.attn_cond_proj = (
                 ModuleList(
@@ -556,6 +655,7 @@ class UNet1d(Module):
             if x.dim() == 3
             else rearrange(x, "rt mz -> rt () mz")
         )
+        t = self.time_mlp(time)
 
         if self.conditional:
             init_cond = default(init_cond, lambda: torch.zeros_like(x))
@@ -564,11 +664,11 @@ class UNet1d(Module):
                 if init_cond.dim() == 3
                 else rearrange(init_cond, "rt mz -> rt () mz")
             )
+            init_cond = self.init_cond_proj(init_cond, t)
             x = torch.cat((init_cond, x), dim=1)
 
         x = self.init_conv(x)
         r = x.clone()
-        t = self.time_mlp(time)
 
         if self.conditional:
             attn_cond = default(attn_cond, lambda: torch.zeros_like(x))
@@ -615,4 +715,5 @@ class UNet1d(Module):
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
         x = rearrange(x, "(b rt) d mz -> b (rt d) mz", b=b)
+
         return self.final_act(x)
