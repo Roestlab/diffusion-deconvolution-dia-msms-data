@@ -636,14 +636,14 @@ class ModelInterface(object):
         ms2_cond = ms2_cond.squeeze(0).cpu().detach().numpy()
         ms1_shape = None
 
-        if ms1_cond.dim() <= 2:
+        if ms1_cond.dim() == 2:
             ms1_shape = "1d"
+            ms1_cond = ms1_cond.cpu().detach().numpy()
         elif ms1_cond.dim() == 3:
             ms1_shape = "2d"
+            ms1_cond = ms1_cond.squeeze(0).cpu().detach().numpy()
         else:
             raise ValueError(f"Unknown ms1_cond shape: {ms1_cond.shape}")
-
-        ms1_cond = ms1_cond.squeeze(0).cpu().detach().numpy()
 
         pred_noise_df = self._ms2_mesh_to_df(pred_noise)
         pred_noise_plot = pred_noise_df.plot(
@@ -746,7 +746,7 @@ class ModelInterface(object):
                 backend=backend,
             )
         elif ms1_shape == "2d":
-            ms1_df = self._ms2_to_df(ms1_cond)
+            ms1_df = self._ms2_mesh_to_df(ms1_cond)
             ms1_plot = ms1_df.plot(
                 x="y",
                 y="x",
