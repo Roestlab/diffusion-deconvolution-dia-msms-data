@@ -260,6 +260,7 @@ class ModelInterface(object):
         num_warmup_steps=5,
         learning_rate=1e-4,
         use_wandb=True,
+        log_every_n_epochs=100,
         checkpoint_path="best_model.ckpt",
     ):
         """
@@ -320,14 +321,15 @@ class ModelInterface(object):
                 best_loss = avg_train_loss
                 best_epoch = epoch + 1
                 self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
-                if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 100 == 0)):
-                    self.log_single_prediction(
-                        best_epoch,
-                        best_loss,
-                        dataloader,
-                        num_steps=[100, 500, 1000],
-                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
-                    )
+
+            if use_wandb and (epoch == 0 or epoch % log_every_n_epochs == 0):
+                self.log_single_prediction(
+                    best_epoch,
+                    best_loss,
+                    dataloader,
+                    num_steps=[100, 500, 1000],
+                    path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
+                )
 
             continue_training = self.callback_handler.epoch_callback(
                 epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -408,15 +410,15 @@ class ModelInterface(object):
                     best_epoch = epoch + 1
                     self.save_checkpoint(None, epoch, best_loss, checkpoint_path)
 
-                    # Only log predictions if using wandb and for the firt epoch and then only after epoch 15 every 100 epochs if the loss is still the best
-                    if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 100 == 0)):
-                        self.log_single_prediction(
-                            best_epoch,
-                            best_loss,
-                            dataloader,
-                            num_steps=[100, 500, 1000],
-                            path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
-                        )
+                # Only log predictions if using wandb and for the firt epoch and then only after every 100 epochs
+                if use_wandb and (epoch == 0 or epoch % 100 == 0):
+                    self.log_single_prediction(
+                        best_epoch,
+                        best_loss,
+                        dataloader,
+                        num_steps=[100, 500, 1000],
+                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
+                    )
 
                 continue_training = self.callback_handler.epoch_callback(
                     epoch=epoch, epoch_loss=np.mean(batch_loss)
