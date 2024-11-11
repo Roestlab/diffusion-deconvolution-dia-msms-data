@@ -33,7 +33,7 @@ def exists(x):
 
 def default(val, d):
     if exists(val):
-        return
+        return val
 
     return d() if callable(d) else d
 
