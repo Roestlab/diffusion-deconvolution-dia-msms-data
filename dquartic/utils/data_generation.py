@@ -5,6 +5,7 @@ import polars as pl
 from scipy.sparse import csr_matrix
 import pyarrow as pa
 import pyarrow.parquet as pq
+import fastparquet as fpq
 from tqdm import tqdm
 
 
@@ -112,18 +113,17 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
         }
         data.append(slice_data)
     
-    return pa.Table.from_pylist(data)
+    return pd.DataFrame(data)
 
 def write_to_parquet(table, filename):
-    if os.path.exists(filename):
-        # If the file exists, append to it
-        with pq.ParquetWriter(filename, table.schema, append=True) as writer:
-            writer.write_table(table)
-    else:
-        # If the file doesn't exist, create it
-        pq.write_table(table, filename)
-
-
+    # if os.path.exists(filename):
+    #     # If the file exists, append to it
+    #     with pq.ParquetWriter(filename, table.schema, append=True) as writer:
+    #         writer.write_table(table)
+    # else:
+    #     # If the file doesn't exist, create it
+    #     pq.write_table(table, filename)
+    fpq.write(filename, table.to_pandas(), append=True)
 
 
 def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5, mz_ppm_tol=10, bin_mz=True, mz_bin_ppm_tol=50, ms1_fixed_mz_size=150, ms2_fixed_mz_size=80_000):
