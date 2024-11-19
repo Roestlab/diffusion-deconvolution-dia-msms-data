@@ -1,7 +1,9 @@
 import click
 import ast
+from datetime import datetime
 from .utils.data_loader import DIAMSDataset
 from .utils.config_loader import load_train_config, generate_train_config
+from .utils.data_generation import generate_data_slices
 from .model.building_blocks import CustomTransformer
 from .model.model import DDIMDiffusionModel
 from .model.unet1d import UNet1d
@@ -146,3 +148,20 @@ def generate_config(config_path):
     generate_train_config(config_path)
 
 
+@cli.command()
+@click.argument("input-file", type=click.Path(exists=True), required=True)
+@click.argument("output-file", type=click.Path(), required=True)
+@click.option("--window-size", default=34, help="Retention time window size for data slices")
+@click.option("--sliding-step", default=5, help="Sliding step overlap for retention time windows slices")
+@click.option("--mz-ppm-tol", default=10, help="m/z tolerance in ppm for extracting MS1 data for a given isolation target")
+@click.option("--bin-mz", default=True, help="Bin m/z values further to reduce the number of unique m/z values (reduce the size of the data)")
+@click.option("--mz-bin-ppm-tol", default=50, help="m/z tolerance in ppm for binning m/z values")
+@click.option("--ms1-fixed-mz-size", default=150, help="Fixed m/z size for MS1 data, fixed dimension size for the m/z axis")
+@click.option("--ms2-fixed-mz-size", default=80_000, help="Fixed m/z size for MS2 data, fixed dimension size for the m/z axis")
+def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, mz_bin_ppm_tol, ms1_fixed_mz_size, ms2_fixed_mz_size):
+    """
+    Generate training data.
+    """
+    click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info: Generating data slices from - {input_file}")
+    generate_data_slices(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, mz_bin_ppm_tol, ms1_fixed_mz_size, ms2_fixed_mz_size)
+    click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info:  Saved data slices to - {output_file}")
