@@ -134,15 +134,21 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
     return pa.Table.from_pylist(data, schema=schema)
 
 def write_to_parquet(table, filename):
+    
+    # Convert list columns to numpy arrays
+    for col in ['ms1_data', 'ms2_data', 'rt_values', 'mz_values_ms1', 'mz_values_ms2']:
+        if col in table.columns:
+            table[col] = table[col].apply(np.array)
+    
     if os.path.exists(filename):
         # If the file exists, append to it
         # with pq.ParquetWriter(filename, table.schema, append=True) as writer:
             # writer.write_table(table)
-        fpq.write(filename, table, append=True)
+        fpq.write(filename, table, append=True, object_encoding='json')
     else:
         # If the file doesn't exist, create it
         # pq.write_table(table, filename)
-        fpq.write(filename, table)
+        fpq.write(filename, table, object_encoding='json')
 
 
 def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5, mz_ppm_tol=10, bin_mz=True, mz_bin_ppm_tol=50, ms1_fixed_mz_size=150, ms2_fixed_mz_size=80_000):
