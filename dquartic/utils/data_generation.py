@@ -123,7 +123,7 @@ def write_to_parquet(table, filename):
     # else:
     #     # If the file doesn't exist, create it
     #     pq.write_table(table, filename)
-    fpq.write(filename, table.to_pandas(), append=True)
+    fpq.write(filename, table, append=True)
 
 
 def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5, mz_ppm_tol=10, bin_mz=True, mz_bin_ppm_tol=50, ms1_fixed_mz_size=150, ms2_fixed_mz_size=80_000):
