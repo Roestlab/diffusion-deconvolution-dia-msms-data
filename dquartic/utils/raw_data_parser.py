@@ -5,12 +5,6 @@ import polars as pl
 import zlib
 import struct
 
-# set global plotting backend for pandas
-pd.options.plotting.backend = "ms_plotly"  # one of: "ms_bokeh" "ms_matplotlib" "ms_plotly"
-
-from plotly.subplots import make_subplots
-
-
 class SqMassRawLoader:
     def __init__(self, input_file):
         self.input_file = input_file
@@ -209,66 +203,3 @@ class SqMassRawLoader:
         bins = pd.cut(mz_values.to_numpy(), bins=bin_edges, labels=False)
         # Add the bins as a new column
         return df.with_columns(pl.Series(name="mz_bin", values=bins))
-
-    def plot_xic_peakmap(self, ms1_ms2_slice, rt_tgt, rt_win, mz_iso_win_idx):
-        p1 = ms1_ms2_slice.to_pandas().plot(
-            kind="chromatogram",
-            x="RETENTION_TIME",
-            y="intensity",
-            by="mslevel",
-            title="MS1 Chromatogram",
-            aggregate_duplicates=False,
-            show_plot=False,
-        )
-
-        p2 = ms1_ms2_slice.to_pandas().plot(
-            kind="peakmap",
-            x="RETENTION_TIME",
-            y="mz",
-            z="normalized_intensity",
-            by="mslevel",
-            title="MS1 PeakMap",
-            z_log_scale=False,
-            bin_peaks=True,
-            show_plot=False,
-        )
-
-        plot_list = [p1, p2]
-
-        fig = make_subplots(rows=1, cols=len(plot_list), subplot_titles=["XIC", "PeakMap"])
-        for idx, f in enumerate(plot_list):
-            for trace in f.data:
-                fig.add_trace(trace, row=1, col=idx + 1)
-                fig.update_xaxes(title_text="Retention Time", row=1, col=idx + 1)
-                if idx == 0:
-                    fig.update_yaxes(title_text="Intensity", row=1, col=idx + 1)
-                else:
-                    fig.update_yaxes(title_text="mass-to-charge", row=1, col=idx + 1)
-                fig.update_layout(
-                    title=f"Extraction: mz isolation target = {self.iso_win_info['ISOLATION_TARGET'][mz_iso_win_idx]} | RT = {rt_tgt}±{rt_win/2}",
-                    legend_title_text="MS Level",
-                    showlegend=True,
-                )
-
-        fig.show()
-        return fig
-
-    def plot_peakmap_3d(self, ms1_ms2_slice, rt_tgt, rt_win, mz_iso_win_idx):
-        fig = ms1_ms2_slice.to_pandas().plot(
-            kind="peakmap",
-            x="RETENTION_TIME",
-            y="mz",
-            z="normalized_intensity",
-            by="mslevel",
-            title=f"Extraction: mz isolation target = {self.iso_win_info['ISOLATION_TARGET'][mz_iso_win_idx]} | RT = {rt_tgt}±{rt_win/2}",
-            z_log_scale=False,
-            bin_peaks=False,
-            show_plot=False,
-            plot_3d=True,
-            width=1000,
-            height=800,
-        )
-        fig.update_layout(legend_title_text="MS Level")
-
-        fig.show()
-        return fig
