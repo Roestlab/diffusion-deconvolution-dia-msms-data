@@ -116,14 +116,15 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
     return pd.DataFrame(data)
 
 def write_to_parquet(table, filename):
-    # if os.path.exists(filename):
-    #     # If the file exists, append to it
-    #     with pq.ParquetWriter(filename, table.schema, append=True) as writer:
-    #         writer.write_table(table)
-    # else:
-    #     # If the file doesn't exist, create it
-    #     pq.write_table(table, filename)
-    fpq.write(filename, table, append=True)
+    if os.path.exists(filename):
+        # If the file exists, append to it
+        # with pq.ParquetWriter(filename, table.schema, append=True) as writer:
+            # writer.write_table(table)
+        fpq.write(filename, table, append=True)
+    else:
+        # If the file doesn't exist, create it
+        # pq.write_table(table, filename)
+        fpq.write(filename, table)
 
 
 def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5, mz_ppm_tol=10, bin_mz=True, mz_bin_ppm_tol=50, ms1_fixed_mz_size=150, ms2_fixed_mz_size=80_000):
