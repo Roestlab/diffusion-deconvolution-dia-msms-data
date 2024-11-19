@@ -112,8 +112,26 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
             'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32),
         }
         data.append(slice_data)
+        
+    # Define the schema explicitly
+    schema = pa.schema([
+        ('file', pa.string()),
+        ('slice_index', pa.int64()),
+        ('mz_isolation_target', pa.float64()),
+        ('mz_start', pa.float64()),
+        ('mz_end', pa.float64()),
+        ('rt_start', pa.float64()),
+        ('rt_end', pa.float64()),
+        ('ms1_data', pa.list_(pa.float32())),
+        ('ms2_data', pa.list_(pa.float32())),
+        ('ms1_shape', pa.list_(pa.int64())),
+        ('ms2_shape', pa.list_(pa.int64())),
+        ('rt_values', pa.list_(pa.float32())),
+        ('mz_values_ms1', pa.list_(pa.float32())),
+        ('mz_values_ms2', pa.list_(pa.float32()))
+    ])
     
-    return pd.DataFrame(data)
+    return pa.Table.from_pylist(data, schema=schema)
 
 def write_to_parquet(table, filename):
     if os.path.exists(filename):
@@ -172,5 +190,5 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
         table = create_parquet_data(input_file, current_iso, slices_ms1, slices_ms2, windows, unique_mz, unique_mz_ms2)
 
         # Write to Parquet file
-        write_to_parquet(table, output_file)
+        write_to_parquet(table.to_pandas(), output_file)
     
