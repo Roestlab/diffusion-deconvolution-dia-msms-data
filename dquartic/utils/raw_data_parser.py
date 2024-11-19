@@ -111,7 +111,7 @@ class SqMassRawLoader:
         ).with_columns(mslevel=1)
 
         if bin_mz:
-            ms1_tgt = ms1_tgt.group_by("mslevel").map_groups(self.bin_ppm, ppm=bin_ppm_tol)
+            ms1_tgt = ms1_tgt.group_by("mslevel").map_groups(self.bin_ppm)
 
             # Compute the average mz for each bin
             average_mz = ms1_tgt.group_by(["mslevel", "mz_bin"]).agg(
@@ -140,7 +140,7 @@ class SqMassRawLoader:
         )
 
         if bin_mz:
-            ms2_tgt = ms2_tgt.group_by("mslevel").map_groups(self.bin_ppm, ppm=bin_ppm_tol)
+            ms2_tgt = ms2_tgt.group_by("mslevel").map_groups(self.bin_ppm)
 
             # Compute the average mz for each bin
             average_mz = ms2_tgt.group_by(["mslevel", "mz_bin"]).agg(
