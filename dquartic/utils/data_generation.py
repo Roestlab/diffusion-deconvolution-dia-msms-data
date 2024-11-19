@@ -107,8 +107,8 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
             'ms1_shape': slice_ms1.shape,
             'ms2_shape': slice_ms2.shape,
             'rt_values': np.array(window),
-            'mz_values_ms1': unique_mz,
-            'mz_values_ms2': unique_mz_ms2
+            'mz_values_ms1': unique_mz.to_numpy(),
+            'mz_values_ms2': unique_mz_ms2.to_numpy()
         }
         data.append(slice_data)
     
