@@ -103,13 +103,13 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
             'mz_end': current_iso['mzEnd'],
             'rt_start': window[0],
             'rt_end': window[-1],
-            'ms1_data': slice_ms1.flatten().astype(np.float32).tolist(),
-            'ms2_data': slice_ms2.flatten().astype(np.float32).tolist(),
+            'ms1_data': slice_ms1.flatten().astype(np.float32),
+            'ms2_data': slice_ms2.flatten().astype(np.float32),
             'ms1_shape': list(slice_ms1.shape),
             'ms2_shape': list(slice_ms2.shape),
-            'rt_values': np.array(window).astype(np.float32).tolist(),
-            'mz_values_ms1': unique_mz.to_numpy().astype(np.float32).tolist(),
-            'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32).tolist(),
+            'rt_values': np.array(window).astype(np.float32),
+            'mz_values_ms1': unique_mz.to_numpy().astype(np.float32),
+            'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32),
         }
         data.append(slice_data)
         
@@ -138,7 +138,7 @@ def write_to_parquet(table, filename):
     # Convert list columns to numpy arrays
     for col in ['ms1_data', 'ms2_data', 'rt_values', 'mz_values_ms1', 'mz_values_ms2']:
         if col in table.columns:
-            table[col] = table[col].apply(np.array)
+            table[col] = table[col].apply(list)
     
     if os.path.exists(filename):
         # If the file exists, append to it
@@ -171,7 +171,24 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
             window = unique_sorted_rt[start:end].to_list()
             windows.append(window)
             
-    # pq_writer = pq.ParquetWriter(output_file, table.schema, append=True)
+    schema = pa.schema([
+        ('file', pa.string()),
+        ('slice_index', pa.int64()),
+        ('mz_isolation_target', pa.float64()),
+        ('mz_start', pa.float64()),
+        ('mz_end', pa.float64()),
+        ('rt_start', pa.float64()),
+        ('rt_end', pa.float64()),
+        ('ms1_data', pa.list_(pa.float32())),
+        ('ms2_data', pa.list_(pa.float32())),
+        ('ms1_shape', pa.list_(pa.int64())),
+        ('ms2_shape', pa.list_(pa.int64())),
+        ('rt_values', pa.list_(pa.float32())),
+        ('mz_values_ms1', pa.list_(pa.float32())),
+        ('mz_values_ms2', pa.list_(pa.float32()))
+    ])
+            
+    pq_writer = pq.ParquetWriter(output_file, schema=schema)
 
     total_iterations = len(loader.iso_win_info)
     for idx, current_iso in tqdm(loader.iso_win_info.to_pandas().iterrows(), total=total_iterations, desc="Processing isolation windows"):
@@ -198,5 +215,7 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
         table = create_parquet_data(input_file, current_iso, slices_ms1, slices_ms2, windows, unique_mz, unique_mz_ms2)
 
         # Write to Parquet file
-        write_to_parquet(table.to_pandas(), output_file)
+        # write_to_parquet(table.to_pandas(), output_file)
+        pq_writer.write(table)
+    pq_writer.close()
     
