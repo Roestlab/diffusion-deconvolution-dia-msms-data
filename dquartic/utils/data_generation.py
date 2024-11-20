@@ -103,13 +103,13 @@ def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, wi
             'mz_end': current_iso['mzEnd'],
             'rt_start': window[0],
             'rt_end': window[-1],
-            'ms1_data': slice_ms1.flatten().astype(np.float32),
-            'ms2_data': slice_ms2.flatten().astype(np.float32),
-            'ms1_shape': slice_ms1.shape,
-            'ms2_shape': slice_ms2.shape,
-            'rt_values': np.array(window).astype(np.float32),
-            'mz_values_ms1': unique_mz.to_numpy().astype(np.float32),
-            'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32),
+            'ms1_data': slice_ms1.flatten().astype(np.float32).tolist(),
+            'ms2_data': slice_ms2.flatten().astype(np.float32).tolist(),
+            'ms1_shape': list(slice_ms1.shape),
+            'ms2_shape': list(slice_ms2.shape),
+            'rt_values': np.array(window).astype(np.float32).tolist(),
+            'mz_values_ms1': unique_mz.to_numpy().astype(np.float32).tolist(),
+            'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32).tolist(),
         }
         data.append(slice_data)
         
@@ -170,6 +170,8 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
         if end <= num_points:
             window = unique_sorted_rt[start:end].to_list()
             windows.append(window)
+            
+    # pq_writer = pq.ParquetWriter(output_file, table.schema, append=True)
 
     total_iterations = len(loader.iso_win_info)
     for idx, current_iso in tqdm(loader.iso_win_info.to_pandas().iterrows(), total=total_iterations, desc="Processing isolation windows"):
