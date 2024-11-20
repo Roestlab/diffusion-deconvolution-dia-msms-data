@@ -158,10 +158,11 @@ def generate_config(config_path):
 @click.option("--mz-bin-ppm-tol", default=50, help="m/z tolerance in ppm for binning m/z values")
 @click.option("--ms1-fixed-mz-size", default=150, help="Fixed m/z size for MS1 data, fixed dimension size for the m/z axis")
 @click.option("--ms2-fixed-mz-size", default=80_000, help="Fixed m/z size for MS2 data, fixed dimension size for the m/z axis")
-def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, mz_bin_ppm_tol, ms1_fixed_mz_size, ms2_fixed_mz_size):
+@click.option("--batch-size", default=100, help="Batch size for generating RT slices")
+def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, mz_bin_ppm_tol, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size):
     """
     Generate training data.
     """
     click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info: Generating data slices from - {input_file}")
-    generate_data_slices(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, mz_bin_ppm_tol, ms1_fixed_mz_size, ms2_fixed_mz_size)
+    generate_data_slices(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, mz_bin_ppm_tol, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size)
     click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info:  Saved data slices to - {output_file}")
