@@ -85,33 +85,27 @@ def process_ms_data(ms_data, windows, fixed_mz_size):
 
     sparse_matrix = create_sparse_matrix(ms_data, unique_rt, unique_mz, fixed_mz_size)
 
-    slices = []
-    for window in windows:
-        slice_data = extract_rt_window(sparse_matrix, unique_rt, window)
-        slices.append(slice_data)
+    return sparse_matrix, unique_rt, unique_mz
 
-    return slices, unique_rt, unique_mz
-
-def create_parquet_data(input_file: str, current_iso, slices_ms1, slices_ms2, windows, unique_mz, unique_mz_ms2):
+def create_parquet_data(input_file: str, current_iso, slice_ms1, slice_ms2, window, unique_mz, unique_mz_ms2):
     data = []
-    for i, (slice_ms1, slice_ms2, window) in enumerate(zip(slices_ms1, slices_ms2, windows)):
-        slice_data = {
-            'file': os.path.basename(input_file),
-            'slice_index': i,
-            'mz_isolation_target': current_iso['ISOLATION_TARGET'],
-            'mz_start': current_iso['mzStart'],
-            'mz_end': current_iso['mzEnd'],
-            'rt_start': window[0],
-            'rt_end': window[-1],
-            'ms1_data': slice_ms1.flatten().astype(np.float32),
-            'ms2_data': slice_ms2.flatten().astype(np.float32),
-            'ms1_shape': list(slice_ms1.shape),
-            'ms2_shape': list(slice_ms2.shape),
-            'rt_values': np.array(window).astype(np.float32),
-            'mz_values_ms1': unique_mz.to_numpy().astype(np.float32),
-            'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32),
-        }
-        data.append(slice_data)
+    slice_data = {
+        'file': os.path.basename(input_file),
+        'slice_index': i,
+        'mz_isolation_target': current_iso['ISOLATION_TARGET'],
+        'mz_start': current_iso['mzStart'],
+        'mz_end': current_iso['mzEnd'],
+        'rt_start': window[0],
+        'rt_end': window[-1],
+        'ms1_data': slice_ms1.flatten().astype(np.float32),
+        'ms2_data': slice_ms2.flatten().astype(np.float32),
+        'ms1_shape': list(slice_ms1.shape),
+        'ms2_shape': list(slice_ms2.shape),
+        'rt_values': np.array(window).astype(np.float32),
+        'mz_values_ms1': unique_mz.to_numpy().astype(np.float32),
+        'mz_values_ms2': unique_mz_ms2.to_numpy().astype(np.float32),
+    }
+    data.append(slice_data)
         
     # Define the schema explicitly
     schema = pa.schema([
@@ -205,17 +199,26 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
         ms1_tgt = unique_rt.join(ms1_tgt, on="RETENTION_TIME", how="left")
         ms2_tgt = unique_rt.join(ms2_tgt, on="RETENTION_TIME", how="left")
 
-        # Process MS1 data
-        slices_ms1, unique_rt, unique_mz = process_ms_data(ms1_tgt, windows, fixed_mz_size=ms1_fixed_mz_size)
+        for window in windows:
 
-        # Process MS2 data
-        slices_ms2, _, unique_mz_ms2 = process_ms_data(ms2_tgt, windows, fixed_mz_size=ms2_fixed_mz_size)
+            # Process MS1 data
+            sparse_matrix, unique_rt, unique_mz = process_ms_data(ms1_tgt, windows, fixed_mz_size=ms1_fixed_mz_size)
+            slice_ms1 = extract_rt_window(sparse_matrix, unique_rt, window)
 
-        # Create Parquet data
-        table = create_parquet_data(input_file, current_iso, slices_ms1, slices_ms2, windows, unique_mz, unique_mz_ms2)
+            # Process MS2 data
+            sparse_matrix_ms2, _, unique_mz_ms2 = process_ms_data(ms2_tgt, windows, fixed_mz_size=ms2_fixed_mz_size)
+            slice_ms2 = extract_rt_window(sparse_matrix_ms2, unique_rt, window)
 
-        # Write to Parquet file
-        # write_to_parquet(table.to_pandas(), output_file)
-        pq_writer.write(table)
+            # Create Parquet data
+            table = create_parquet_data(input_file, current_iso, slice_ms1, slice_ms2, window, unique_mz, unique_mz_ms2)
+
+            # Write to Parquet file
+            pq_writer.write(table)
+            
+            # Clear variables to free up memory
+            del sparse_matrix, sparse_matrix_ms2, slice_ms1, slice_ms2, table
+        
+        del ms1_tgt, ms2_tgt
+            
     pq_writer.close()
     
