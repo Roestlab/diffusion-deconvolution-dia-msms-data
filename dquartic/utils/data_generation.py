@@ -87,11 +87,11 @@ def process_ms_data(ms_data, windows, fixed_mz_size):
 
     return sparse_matrix, unique_rt, unique_mz
 
-def create_parquet_data(input_file: str, current_iso, slice_ms1, slice_ms2, window, unique_mz, unique_mz_ms2):
+def create_parquet_data(input_file: str, current_iso, slice_idx, slice_ms1, slice_ms2, window, unique_mz, unique_mz_ms2):
     data = []
     slice_data = {
         'file': os.path.basename(input_file),
-        'slice_index': i,
+        'slice_index': slice_idx,
         'mz_isolation_target': current_iso['ISOLATION_TARGET'],
         'mz_start': current_iso['mzStart'],
         'mz_end': current_iso['mzEnd'],
@@ -199,6 +199,7 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
         ms1_tgt = unique_rt.join(ms1_tgt, on="RETENTION_TIME", how="left")
         ms2_tgt = unique_rt.join(ms2_tgt, on="RETENTION_TIME", how="left")
 
+        slice_idx = 0
         for window in windows:
 
             # Process MS1 data
@@ -210,10 +211,12 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
             slice_ms2 = extract_rt_window(sparse_matrix_ms2, unique_rt, window)
 
             # Create Parquet data
-            table = create_parquet_data(input_file, current_iso, slice_ms1, slice_ms2, window, unique_mz, unique_mz_ms2)
+            table = create_parquet_data(input_file, current_iso, slice_idx, slice_ms1, slice_ms2, window, unique_mz, unique_mz_ms2)
 
             # Write to Parquet file
             pq_writer.write(table)
+            
+            slice_idx += 1
             
             # Clear variables to free up memory
             del sparse_matrix, sparse_matrix_ms2, slice_ms1, slice_ms2, table
