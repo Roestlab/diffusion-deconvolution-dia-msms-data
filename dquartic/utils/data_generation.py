@@ -85,7 +85,7 @@ def create_sparse_matrix(df, rt_values, mz_values, fixed_mz_size=150):
     
     return sparse_matrix
 
-@profile
+# @profile
 def process_ms_data(ms_data, windows, fixed_mz_size):
     unique_rt = ms_data["RETENTION_TIME"].unique().sort()
     unique_mz = ms_data["mz"].unique().sort().drop_nulls()
@@ -157,8 +157,8 @@ def write_to_parquet(table, filename):
         # pq.write_table(table, filename)
         fpq.write(filename, table, object_encoding='json')
 
-
-def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5, mz_ppm_tol=10, bin_mz=True, mz_bin_ppm_tol=50, ms1_fixed_mz_size=150, ms2_fixed_mz_size=80_000, batch_size = 100):
+@profile
+def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5, mz_ppm_tol=10, bin_mz=True, mz_bin_ppm_tol=2000, ms1_fixed_mz_size=10, ms2_fixed_mz_size=7000, batch_size = 500):
 
     loader = SqMassRawLoader(input_file)
     loader.load_all_data()
@@ -197,43 +197,38 @@ def generate_data_slices(input_file, output_file, window_size=34, sliding_step=5
             
     pq_writer = pq.ParquetWriter(output_file, schema=schema)
 
-    total_iterations = len(loader.iso_win_info)
-    with tqdm(total=total_iterations, desc="Processing isolation windows") as pbar:
-        for idx, current_iso in loader.iso_win_info.to_pandas().iterrows():
+    for idx, current_iso in loader.iso_win_info.to_pandas().iterrows():
+        print(f"{idx} of {len(loader.iso_win_info)} Processing isolation target {current_iso['ISOLATION_TARGET']}")
+        ms1_tgt = loader.extract_ms1_slice(current_iso, mz_ppm_tol, bin_mz, mz_bin_ppm_tol)
+        ms2_tgt = loader.extract_ms2_slice(current_iso, bin_mz, mz_bin_ppm_tol)
 
-            ms1_tgt = loader.extract_ms1_slice(current_iso, mz_ppm_tol, bin_mz, mz_bin_ppm_tol)
-            ms2_tgt = loader.extract_ms2_slice(current_iso, bin_mz, mz_bin_ppm_tol)
+        # Put both MS1 and MS2 RETENTION_TIME values on the same grid
+        rt_ms1 = ms1_tgt['RETENTION_TIME']
+        rt_ms2 = ms2_tgt['RETENTION_TIME']
+        unique_rt = pl.concat([rt_ms1, rt_ms2]).unique().sort().to_frame()
 
-            # Put both MS1 and MS2 RETENTION_TIME values on the same grid
-            rt_ms1 = ms1_tgt['RETENTION_TIME']
-            rt_ms2 = ms2_tgt['RETENTION_TIME']
-            unique_rt = pl.concat([rt_ms1, rt_ms2]).unique().sort().to_frame()
+        # Reindex MS1/MS2 DataFrame to align with the common grid
+        ms1_tgt = unique_rt.join(ms1_tgt, on="RETENTION_TIME", how="left")
+        ms2_tgt = unique_rt.join(ms2_tgt, on="RETENTION_TIME", how="left")
 
-            # Reindex MS1/MS2 DataFrame to align with the common grid
-            ms1_tgt = unique_rt.join(ms1_tgt, on="RETENTION_TIME", how="left")
-            ms2_tgt = unique_rt.join(ms2_tgt, on="RETENTION_TIME", how="left")
+        for batch_i in tqdm(range(0, len(windows), batch_size)):
+            window_batch = windows[batch_i:batch_i+batch_size]
+            # Process MS1 data
+            slices_ms1, unique_rt, unique_mz = process_ms_data(ms1_tgt, window_batch, fixed_mz_size=ms1_fixed_mz_size)
 
-            for batch_i in range(0, len(windows), batch_size):
-                window_batch = windows[batch_i:batch_i+batch_size]
-                # Process MS1 data
-                slices_ms1, unique_rt, unique_mz = process_ms_data(ms1_tgt, window_batch, fixed_mz_size=ms1_fixed_mz_size)
+            # Process MS2 data
+            slices_ms2, _, unique_mz_ms2 = process_ms_data(ms2_tgt, window_batch, fixed_mz_size=ms2_fixed_mz_size)
 
-                # Process MS2 data
-                slices_ms2, _, unique_mz_ms2 = process_ms_data(ms2_tgt, window_batch, fixed_mz_size=ms2_fixed_mz_size)
+            # Create Parquet data
+            table = create_parquet_data(input_file, current_iso, slices_ms1, slices_ms2, window_batch, unique_mz, unique_mz_ms2)
 
-                # Create Parquet data
-                table = create_parquet_data(input_file, current_iso, slices_ms1, slices_ms2, window_batch, unique_mz, unique_mz_ms2)
-
-                # Write to Parquet file
-                pq_writer.write(table)
-                
-                memory_info = log_memory_usage(batch_i)
-                pbar.set_postfix_str(memory_info)
-            
-                # Clear variables to free up memory
-                del slices_ms1, slices_ms2, table
-            
-            del ms1_tgt, ms2_tgt
+            # Write to Parquet file
+            pq_writer.write(table)
+        
+            # Clear variables to free up memory
+            del slices_ms1, slices_ms2, table
+        
+        del ms1_tgt, ms2_tgt
             
         pq_writer.close()
     

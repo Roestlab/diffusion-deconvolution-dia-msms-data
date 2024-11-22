@@ -83,16 +83,16 @@ class SqMassRawLoader:
         ms_data = ms_data.explode(["mz", "intensity"])
         return ms_data
 
-    @profile
+    # @profile
     def load_all_data(self):
         self.load_isolation_window_info()
         self.load_spectrum_isolation_map()
         self.ms1_data = self.load_ms_data(1)
         self.ms2_data = self.load_ms_data(2)
 
-    @profile
+    # @profile
     def extract_ms1_slice(
-        self, tgt_mz_frame, ppm_tol: int = 10, bin_mz: bool = True, bin_ppm_tol: int = 50
+        self, tgt_mz_frame, ppm_tol: int = 10, bin_mz: bool = True, bin_ppm_tol: int = 2000
     ):
         target_mz = (
             self.spec_id_iso_map.filter(
@@ -129,8 +129,8 @@ class SqMassRawLoader:
 
         return ms1_tgt
 
-    @profile
-    def extract_ms2_slice(self, tgt_mz_frame, bin_mz: bool = True, bin_ppm_tol: int = 50):
+    # @profile
+    def extract_ms2_slice(self, tgt_mz_frame, bin_mz: bool = True, bin_ppm_tol: int = 2000):
         spectrum_ids = (
             self.spec_id_iso_map.filter(
                 pl.col("ISOLATION_TARGET") == tgt_mz_frame["ISOLATION_TARGET"]
