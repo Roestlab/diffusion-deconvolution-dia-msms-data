@@ -92,7 +92,7 @@ class SqMassRawLoader:
 
     # @profile
     def extract_ms1_slice(
-        self, tgt_mz_frame, ppm_tol: int = 10, bin_mz: bool = True, bin_ppm_tol: int = 2000
+        self, tgt_mz_frame, ppm_tol: int = 10, bin_mz: bool = True, num_bins: int = 150
     ):
         target_mz = (
             self.spec_id_iso_map.filter(
@@ -114,7 +114,7 @@ class SqMassRawLoader:
         ).with_columns(mslevel=1)
 
         if bin_mz:
-            ms1_tgt = ms1_tgt.group_by("mslevel").map_groups(self.bin_ppm)
+            ms1_tgt = ms1_tgt.group_by("mslevel").map_groups(lambda df: self.bin_fixed_count(df, num_bins))
 
             # Compute the average mz for each bin
             average_mz = ms1_tgt.group_by(["mslevel", "mz_bin"]).agg(
@@ -130,7 +130,7 @@ class SqMassRawLoader:
         return ms1_tgt
 
     # @profile
-    def extract_ms2_slice(self, tgt_mz_frame, bin_mz: bool = True, bin_ppm_tol: int = 2000):
+    def extract_ms2_slice(self, tgt_mz_frame, bin_mz: bool = True, num_bins: int = 30_000):
         spectrum_ids = (
             self.spec_id_iso_map.filter(
                 pl.col("ISOLATION_TARGET") == tgt_mz_frame["ISOLATION_TARGET"]
@@ -144,7 +144,7 @@ class SqMassRawLoader:
         )
 
         if bin_mz:
-            ms2_tgt = ms2_tgt.group_by("mslevel").map_groups(self.bin_ppm)
+            ms2_tgt = ms2_tgt.group_by("mslevel").map_groups(lambda df: self.bin_fixed_count(df, num_bins))
 
             # Compute the average mz for each bin
             average_mz = ms2_tgt.group_by(["mslevel", "mz_bin"]).agg(
@@ -203,6 +203,16 @@ class SqMassRawLoader:
         mz_values = df["mz"]
         reference_mz = mz_values.min()  # Smallest mz as the reference
         bin_edges = reference_mz * (1 + np.arange(0, len(mz_values) + 1) * ppm / 1e6)
+        # Assign bins
+        bins = pd.cut(mz_values.to_numpy(), bins=bin_edges, labels=False)
+        # Add the bins as a new column
+        return df.with_columns(pl.Series(name="mz_bin", values=bins))
+    
+    @staticmethod
+    def bin_fixed_count(df: pl.DataFrame, num_bins: int) -> pl.DataFrame:
+        mz_values = df["mz"]
+        min_mz, max_mz = mz_values.min(), mz_values.max()
+        bin_edges = np.linspace(min_mz, max_mz, num_bins)  # Divide into num_bins
         # Assign bins
         bins = pd.cut(mz_values.to_numpy(), bins=bin_edges, labels=False)
         # Add the bins as a new column
