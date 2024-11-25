@@ -33,6 +33,7 @@ def cli():
 
 @cli.command()
 @click.argument("config-path", type=click.Path(exists=True), required=True)
+@click.option("--parquet_directory", default=None, help="Path to the directory containing the Parquet files containing the MS1 and MS2 data. Mutually exclusive with `ms2_file` and `ms1_file`. Overides config file")
 @click.option("--ms2-data-path", default=None, help="Path to MS2 data, overides config file")
 @click.option("--ms1-data-path", default=None, help="Path to MS1 data, overides config file")
 @click.option("--batch-size", default=None, help="Batch size for training, overides config file")
@@ -41,6 +42,7 @@ def cli():
 @click.option("--threads", default=None, help="Number of threads for data loading, overides config file")
 def train(
     config_path,
+    parquet_directory,
     ms2_data_path,
     ms1_data_path,
     batch_size,
@@ -70,8 +72,9 @@ def train(
     
     click.echo(f"Info: Loading config from {config_path}")
         
-    config = load_train_config(config_path, ms2_data_path=ms2_data_path, ms1_data_path=ms1_data_path, batch_size=batch_size, checkpoint_path=checkpoint_path, use_wandb=use_wandb, threads=threads)
+    config = load_train_config(config_path, parquet_directory=parquet_directory, ms2_data_path=ms2_data_path, ms1_data_path=ms1_data_path, batch_size=batch_size, checkpoint_path=checkpoint_path, use_wandb=use_wandb, threads=threads)
     
+    parquet_directory = config['data']['parquet_directory']
     ms2_data_path = config['data']['ms2_data_path']
     ms1_data_path = config['data']['ms1_data_path']
     batch_size = config['model']['batch_size']
@@ -79,7 +82,7 @@ def train(
     use_wandb = config['wandb']['use_wandb']
     threads = config['threads']
 
-    dataset = DIAMSDataset(ms2_data_path, ms1_data_path, normalize=config['data']['normalize'])
+    dataset = DIAMSDataset(parquet_directory, ms2_data_path, ms1_data_path, normalize=config['data']['normalize'])
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

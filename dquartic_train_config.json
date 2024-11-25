@@ -1,7 +1,8 @@
 {
     "data":{
-        "ms2_data_path": "data/MS2_data.csv",
-        "ms1_data_path": "data/MS1_data.csv",
+        "parquet_directory": "data/",
+        "ms2_data_path": null,
+        "ms1_data_path": null,
         "normalize": "minmax"
     },
     "model":{

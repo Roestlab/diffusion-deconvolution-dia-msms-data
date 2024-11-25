@@ -16,6 +16,10 @@ def load_train_config(config_path: str, **kwargs):
         config_params = json.load(f)
 
     # Override the config params with the keyword arguments
+    if "parquet_directory" in kwargs:
+        if kwargs["parquet_directory"] is not None:
+            config_params["data"]["parquet_directory"] = kwargs["parquet_directory"]
+            
     if "ms2_data_path" in kwargs:
         if kwargs["ms2_data_path"] is not None:
             config_params["data"]["ms2_data_path"] = kwargs["ms2_data_path"]
@@ -52,8 +56,9 @@ def generate_train_config(config_path: str):
     """
     full_config = {
         "data": {
-            "ms2_data_path": "data/MS2_data.csv",
-            "ms1_data_path": "data/MS1_data.csv",
+            "parquet_directory": "data/",
+            "ms2_data_path": None,
+            "ms1_data_path": None,
             "normalize": "minmax",
         },
         "model": {
