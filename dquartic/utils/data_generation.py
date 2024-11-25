@@ -284,4 +284,4 @@ def generate_data_slices(
 
         del ms1_tgt, ms2_tgt
 
-        pq_writer.close()
+    pq_writer.close()
