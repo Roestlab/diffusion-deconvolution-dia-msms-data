@@ -5,7 +5,6 @@ import polars as pl
 from scipy.sparse import csr_matrix
 import pyarrow as pa
 import pyarrow.parquet as pq
-import fastparquet as fpq
 from tqdm import tqdm
 from memory_profiler import profile
 import psutil
@@ -106,8 +105,12 @@ def process_ms_data(ms_data, windows, fixed_mz_size):
 
     slices = []
     for window in windows:
-        slice_data = extract_rt_window(sparse_matrix, unique_rt, window)
-        slices.append(slice_data)
+        slice_data = extract_rt_window(sparse_matrix, unique_rt.to_numpy(), window)
+        if slice_data.max()==0:
+            # If the max value is 0, then the slice is empty. Probably no signal in this window
+            slices.append(np.array([]))
+        else:
+            slices.append(slice_data)
 
     return slices, unique_rt, unique_mz
 
@@ -117,6 +120,9 @@ def create_parquet_data(
 ):
     data = []
     for i, (slice_ms1, slice_ms2, window) in enumerate(zip(slices_ms1, slices_ms2, windows)):
+        if slice_ms1.size == 0 or slice_ms2.size == 0:
+            continue
+        
         slice_data = {
             "file": os.path.basename(input_file),
             "slice_index": i,
@@ -156,24 +162,6 @@ def create_parquet_data(
     )
 
     return pa.Table.from_pylist(data, schema=schema)
-
-
-def write_to_parquet(table, filename):
-
-    # Convert list columns to numpy arrays
-    for col in ["ms1_data", "ms2_data", "rt_values", "mz_values_ms1", "mz_values_ms2"]:
-        if col in table.columns:
-            table[col] = table[col].apply(list)
-
-    if os.path.exists(filename):
-        # If the file exists, append to it
-        # with pq.ParquetWriter(filename, table.schema, append=True) as writer:
-        # writer.write_table(table)
-        fpq.write(filename, table, append=True, object_encoding="json")
-    else:
-        # If the file doesn't exist, create it
-        # pq.write_table(table, filename)
-        fpq.write(filename, table, object_encoding="json")
 
 
 @profile
@@ -245,13 +233,8 @@ def generate_data_slices(
         ms2_tgt = loader.extract_ms2_slice(current_iso, bin_mz, ms2_fixed_mz_size)
 
         # Put both MS1 and MS2 RETENTION_TIME values on the same grid
-        rt_ms1 = ms1_tgt["RETENTION_TIME"]
-        rt_ms2 = ms2_tgt["RETENTION_TIME"]
-        unique_rt = pl.concat([rt_ms1, rt_ms2]).unique().sort().to_frame()
-
-        # Reindex MS1/MS2 DataFrame to align with the common grid
-        ms1_tgt = unique_rt.join(ms1_tgt, on="RETENTION_TIME", how="left")
-        ms2_tgt = unique_rt.join(ms2_tgt, on="RETENTION_TIME", how="left")
+        ms1_tgt = unique_sorted_rt.to_frame().join(ms1_tgt, on="RETENTION_TIME", how="left")
+        ms2_tgt = unique_sorted_rt.to_frame().join(ms2_tgt, on="RETENTION_TIME", how="left")
 
         for batch_i in tqdm(range(0, len(windows), batch_size)):
             window_batch = windows[batch_i : batch_i + batch_size]
