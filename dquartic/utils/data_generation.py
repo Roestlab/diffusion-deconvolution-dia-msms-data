@@ -161,7 +161,11 @@ def process_ms_data_in_chunks(ms_data, windows, num_chunks=3, threads=3):
         tmp = np.concatenate((ms2_slice_chunk), axis=1)
         if duplicate_indices.size > 0:
             tmp = np.delete(tmp, duplicate_indices, axis=1)
-        slices_ms2.append(tmp)
+        if tmp.max()==0:
+            # If the max value is 0, then the slice is empty. Probably no signal in this window
+            slices_ms2.append(np.array([]))
+        else:
+            slices_ms2.append(tmp)
     
     return slices_ms2, unique_mz_ms2
 
