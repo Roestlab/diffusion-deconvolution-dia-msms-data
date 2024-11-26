@@ -126,11 +126,41 @@ class SqMassRawLoader:
 
             # Rename mz as mz_org and average_mz as mz
             ms1_tgt = ms1_tgt.rename({"mz": "mz_org", "average_mz": "mz"})
+            
+            # Ensure num_bins by adding right padding if necessary
+            unique_mzs = ms1_tgt["mz"].unique()
+            unique_rt = ms1_tgt["RETENTION_TIME"].unique()
+            if len(unique_mzs) < num_bins:
+                # Compute the step size for padding
+                mz_step = unique_mzs[1] - unique_mzs[0]  # Step size between bins
+                num_padding_bins = num_bins - len(unique_mzs)
+
+                # Generate right padding m/z values
+                right_padding_mz = [
+                    unique_mzs[-1] + mz_step * (i + 1)
+                    for i in range(num_padding_bins)
+                ]
+
+                # Create right padding DataFrame
+                right_padding = pl.DataFrame({
+                    "SPECTRUM_ID": -1,
+                    "NATIVE_ID": ["padding_right"] * len(right_padding_mz) * len(unique_rt),
+                    "RETENTION_TIME": pl.Series([rt for rt in unique_rt for _ in right_padding_mz]),
+                    "mz_org": pl.Series(right_padding_mz * len(unique_rt)),
+                    "intensity": 0.0,
+                    "mslevel": 1,
+                    "mz_bin": -1.0,
+                    "mz": pl.Series(right_padding_mz * len(unique_rt)),
+                }).with_columns(pl.col("SPECTRUM_ID").cast(pl.Int64))
+
+                # Concatenate the original data with right padding
+                ms1_tgt = pl.concat([ms1_tgt, right_padding])
 
         return ms1_tgt
 
     # @profile
     def extract_ms2_slice(self, tgt_mz_frame, bin_mz: bool = True, num_bins: int = 30_000):
+        # Filter the MS2 slice based on target isolation
         spectrum_ids = (
             self.spec_id_iso_map.filter(
                 pl.col("ISOLATION_TARGET") == tgt_mz_frame["ISOLATION_TARGET"]
@@ -144,20 +174,49 @@ class SqMassRawLoader:
         )
 
         if bin_mz:
+            # Bin the m/z values into a fixed number of bins
             ms2_tgt = ms2_tgt.group_by("mslevel").map_groups(lambda df: self.bin_fixed_count(df, num_bins))
 
-            # Compute the average mz for each bin
+            # Compute the average m/z for each bin
             average_mz = ms2_tgt.group_by(["mslevel", "mz_bin"]).agg(
                 pl.col("mz").mean().alias("average_mz")
             )
 
-            # Join the average mz back to the original DataFrame
+            # Replace the original m/z with the average m/z for each bin
             ms2_tgt = ms2_tgt.join(average_mz, on=["mslevel", "mz_bin"])
-
-            # Rename mz as mz_org and average_mz as mz
             ms2_tgt = ms2_tgt.rename({"mz": "mz_org", "average_mz": "mz"})
 
+            # Ensure num_bins by adding right padding if necessary
+            unique_mzs = ms2_tgt["mz"].unique()
+            unique_rt = ms2_tgt["RETENTION_TIME"].unique()
+            if len(unique_mzs) < num_bins:
+                # Compute the step size for padding
+                mz_step = unique_mzs[1] - unique_mzs[0]  # Step size between bins
+                num_padding_bins = num_bins - len(unique_mzs)
+
+                # Generate right padding m/z values
+                right_padding_mz = [
+                    unique_mzs[-1] + mz_step * (i + 1)
+                    for i in range(num_padding_bins)
+                ]
+
+                # Create right padding DataFrame
+                right_padding = pl.DataFrame({
+                    "SPECTRUM_ID": -1,
+                    "NATIVE_ID": ["padding_right"] * len(right_padding_mz) * len(unique_rt),
+                    "RETENTION_TIME": pl.Series([rt for rt in unique_rt for _ in right_padding_mz]),
+                    "mz_org": pl.Series(right_padding_mz * len(unique_rt)),
+                    "intensity": 0.0,
+                    "mslevel": 2,
+                    "mz_bin": -1.0,
+                    "mz": pl.Series(right_padding_mz * len(unique_rt)),
+                }).with_columns(pl.col("SPECTRUM_ID").cast(pl.Int64))
+
+                # Concatenate the original data with right padding
+                ms2_tgt = pl.concat([ms2_tgt, right_padding])
+
         return ms2_tgt
+
 
     def extract_ms_slice(self, rt_tgt, rt_win, mz_iso_win_idx):
         ms1_slice = self.ms1_data.filter(
