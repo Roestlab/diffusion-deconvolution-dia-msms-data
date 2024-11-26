@@ -160,11 +160,12 @@ def generate_config(config_path):
 @click.option("--bin-mz", default=True, help="Bin m/z values further to reduce the number of unique m/z values (reduce the size of the data)")
 @click.option("--ms1-fixed-mz-size", default=10, help="Fixed m/z size for MS1 data, fixed dimension size for the m/z axis")
 @click.option("--ms2-fixed-mz-size", default=7000, help="Fixed m/z size for MS2 data, fixed dimension size for the m/z axis")
-@click.option("--batch-size", default=500, help="Batch size for generating RT slices")
-def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size):
+@click.option("--num-chunks", default=3, help="Batch size for generating RT slices")
+@click.option("--threads", default=3, help="Batch size for generating RT slices")
+def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads):
     """
     Generate training data.
     """
     click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info: Generating data slices from - {input_file}")
-    generate_data_slices(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size)
+    generate_data_slices(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads)
     click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info:  Saved data slices to - {output_file}")
