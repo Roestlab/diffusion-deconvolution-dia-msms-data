@@ -160,8 +160,9 @@ def generate_config(config_path):
 @click.option("--bin-mz", default=True, help="Bin m/z values further to reduce the number of unique m/z values (reduce the size of the data)")
 @click.option("--ms1-fixed-mz-size", default=10, help="Fixed m/z size for MS1 data, fixed dimension size for the m/z axis")
 @click.option("--ms2-fixed-mz-size", default=7000, help="Fixed m/z size for MS2 data, fixed dimension size for the m/z axis")
-@click.option("--num-chunks", default=3, help="Batch size for generating RT slices")
-@click.option("--threads", default=3, help="Batch size for generating RT slices")
+@click.option("--batch-size", default=10, help="Batch size for generating RT slices")
+@click.option("--num-chunks", default=3, help="Number of chunks to process MS2 data for slicing")
+@click.option("--threads", default=3, help="Threads for number of chunks to process in parallel")
 def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads):
     """
     Generate training data.
