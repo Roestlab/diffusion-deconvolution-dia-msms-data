@@ -8,6 +8,7 @@ import pyarrow.parquet as pq
 from tqdm import tqdm
 from memory_profiler import profile
 import psutil
+import concurrent.futures
 
 
 from dquartic.utils.raw_data_parser import SqMassRawLoader
@@ -32,21 +33,10 @@ def extract_rt_window(sparse_matrix, unique_rt, rt_window):
     return sparse_matrix[start_idx : end_idx + 1, :].toarray()
 
 
-def create_sparse_matrix(df, rt_values, mz_values, fixed_mz_size=150):
+def create_sparse_matrix(df, rt_values, mz_values):
     # Create mappings
     rt_to_index = {rt: i for i, rt in enumerate(rt_values)}
     index_to_rt = {i: rt for i, rt in enumerate(rt_values)}
-
-    # Adjust mz_values if necessary
-    if len(mz_values) < fixed_mz_size:
-        avg_mz_diff = np.diff(mz_values).mean()
-        padding_size = (fixed_mz_size - len(mz_values)) // 2
-        padding_values = np.linspace(
-            mz_values[0] - avg_mz_diff * padding_size,
-            mz_values[-1] + avg_mz_diff * padding_size,
-            padding_size,
-        )
-        mz_values = np.concatenate([padding_values, mz_values, padding_values])
 
     mz_to_index = {mz: i for i, mz in enumerate(mz_values)}
     index_to_mz = {i: mz for i, mz in enumerate(mz_values)}
@@ -88,31 +78,92 @@ def create_sparse_matrix(df, rt_values, mz_values, fixed_mz_size=150):
     row_indices = df["rt_index"].to_numpy()
     col_indices = df["mz_index"].to_numpy()
     data = df["intensity"].to_numpy()
-
+    
     sparse_matrix = csr_matrix(
-        (data, (row_indices, col_indices)), shape=(len(rt_values), fixed_mz_size)
+        (data, (row_indices, col_indices)), shape=(len(rt_values), len(mz_values))
     )
 
     return sparse_matrix
 
+def concat_chunked_mzs(list_mz_series):
+    """
+    Concatenate a list of chunked mz pl.Series values and return indices of second and so on duplicate mz values
+    """
+    # Concatenate the DataFrames
+    unique_mz_ms2 = pl.concat(list_mz_series).to_frame()
+
+    # Convert the "mz" column to a numpy array
+    mz_values = unique_mz_ms2["mz"].to_numpy()
+
+    # Find the first occurrence indices of each unique value
+    _, first_occurrence_indices = np.unique(mz_values, return_index=True)
+
+    # Initialize a boolean mask for duplicates
+    duplicates_mask = np.zeros(len(mz_values), dtype=bool)
+
+    # Mark duplicates by setting the mask to True for all indices except the first occurrence
+    for idx in first_occurrence_indices:
+        duplicates_mask[idx] = False  # Set first occurrence to False
+    duplicates_mask[~np.isin(np.arange(len(mz_values)), first_occurrence_indices)] = True  # Mark all non-first occurrences as duplicates
+
+    # Get the indices of the duplicate rows (True in the mask)
+    duplicate_indices = np.where(duplicates_mask)[0]
+
+    return unique_mz_ms2.unique().to_series(), duplicate_indices
 
 # @profile
-def process_ms_data(ms_data, windows, fixed_mz_size):
+def process_ms_data(ms_data, windows, is_chunk=False):
     unique_rt = ms_data["RETENTION_TIME"].unique().sort()
     unique_mz = ms_data["mz"].unique().sort().drop_nulls()
-
-    sparse_matrix = create_sparse_matrix(ms_data, unique_rt, unique_mz, fixed_mz_size)
-
+    
+    sparse_matrix = create_sparse_matrix(ms_data, unique_rt, unique_mz)
     slices = []
     for window in windows:
         slice_data = extract_rt_window(sparse_matrix, unique_rt.to_numpy(), window)
-        if slice_data.max()==0:
+        if not is_chunk and slice_data.max()==0:
             # If the max value is 0, then the slice is empty. Probably no signal in this window
             slices.append(np.array([]))
         else:
             slices.append(slice_data)
 
     return slices, unique_rt, unique_mz
+
+def process_ms_data_in_chunks(ms_data, windows, num_chunks=3, threads=3):
+    # Define a wrapper function for process_ms_data
+    def process_chunk(chunk):
+        return process_ms_data(chunk, windows, is_chunk=True)
+
+    sorted_df = ms_data.sort("mz")
+
+    # Split into N chunks
+    chunk_size = len(sorted_df) // num_chunks
+    chunks = [sorted_df[i * chunk_size : (i + 1) * chunk_size] for i in range(num_chunks)]
+
+    # Handle any remainder (last chunk may contain extra rows)
+    if len(sorted_df) % num_chunks != 0:
+        chunks[-1] = sorted_df[(num_chunks - 1) * chunk_size :]
+        
+    with concurrent.futures.ThreadPoolExecutor(threads) as executor:
+        results = list(executor.map(process_chunk, chunks))
+
+    # Unpack each slices and group window chunks
+    slices_list = [result[0] for result in results]
+    slices_ms2_chunks = []
+    for slices in zip(*slices_list):
+        slices_ms2_chunks.append(list(slices))
+        
+    unique_mz_ms2_chunks = [res[2] for res in results]
+
+    unique_mz_ms2, duplicate_indices = concat_chunked_mzs(unique_mz_ms2_chunks)
+
+    slices_ms2 = []
+    for ms2_slice_chunk in slices_ms2_chunks:
+        tmp = np.concatenate((ms2_slice_chunk), axis=1)
+        if duplicate_indices.size > 0:
+            tmp = np.delete(tmp, duplicate_indices, axis=1)
+        slices_ms2.append(tmp)
+    
+    return slices_ms2, unique_mz_ms2
 
 
 def create_parquet_data(
@@ -175,6 +226,8 @@ def generate_data_slices(
     ms1_fixed_mz_size=150,
     ms2_fixed_mz_size=30_000,
     batch_size=500,
+    num_chunks=3, 
+    threads=3
 ):
 
     loader = SqMassRawLoader(input_file)
@@ -240,13 +293,11 @@ def generate_data_slices(
             window_batch = windows[batch_i : batch_i + batch_size]
             # Process MS1 data
             slices_ms1, unique_rt, unique_mz = process_ms_data(
-                ms1_tgt, window_batch, fixed_mz_size=ms1_fixed_mz_size
-            )
+                ms1_tgt, window_batch)
 
             # Process MS2 data
-            slices_ms2, _, unique_mz_ms2 = process_ms_data(
-                ms2_tgt, window_batch, fixed_mz_size=ms2_fixed_mz_size
-            )
+            slices_ms2, unique_mz_ms2 = process_ms_data_in_chunks(
+                ms2_tgt, window_batch, num_chunks, threads)
 
             # Create Parquet data
             table = create_parquet_data(
