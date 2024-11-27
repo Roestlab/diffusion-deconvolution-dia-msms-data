@@ -284,7 +284,7 @@ class ModelInterface(object):
 
         best_epoch = start_epoch
 
-        for epoch in range(num_epochs):
+        for epoch in range(start_epoch, num_epochs):
             dataloader.dataset.reset_epoch()
 
             batch_loss = self._train_one_epoch(epoch, dataloader)
