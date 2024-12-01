@@ -268,7 +268,7 @@ class ModelInterface(object):
         phase with linear increasing and cosine decreasing for lr scheduling).
         """
 
-        self._set_lr(learning_rate)
+        self._prepare_training(learning_rate)
         # Initialize the learning rate scheduler
         lr_scheduler = self._get_lr_schedule_with_warmup(num_warmup_steps, num_epochs)
 
@@ -846,7 +846,7 @@ class ModelInterface(object):
             ms1_loss_weight=ms1_loss_weight,
         )
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
         self.optimizer.step()
         return loss.item()
 
