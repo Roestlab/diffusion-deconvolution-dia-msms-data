@@ -41,7 +41,7 @@ class DIAMSDataset(Dataset):
             self.data_type = "parquet"
             print(f"Info: Loaded {len(self.meta_df)} MS2 slice samples and MS1 slice samples from Parquet files.")
         else:
-            raise ValueError("Invalid input data arguments. Please provide either a `parquet_directory` or `ms2_file` and `ms1_file`.")
+            raise ValueError(f"Invalid input data arguments. Please provide either a `parquet_directory` or `ms2_file` and `ms1_file`. Got parquet_directory={parquet_directory}, ms2_file={ms2_file}, ms1_file={ms1_file}.")
 
         self.normalize = normalize
         self.used_pairs = set()
