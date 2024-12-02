@@ -14,25 +14,29 @@ def load_train_config(config_path: str, **kwargs):
     """
     with open(config_path, "r") as f:
         config_params = json.load(f)
+    
+    # Default values for missing parameters in json file
+    if "parquet_directory" not in config_params["data"]:
+        config_params["data"]["parquet_directory"] = None
+        
+    if "ms2_data_path" not in config_params["data"]:
+        config_params["data"]["ms2_data_path"] = None
+    
+    if "ms1_data_path" not in config_params["data"]:
+        config_params["data"]["ms1_data_path"] = None
 
     # Override the config params with the keyword arguments
     if "parquet_directory" in kwargs:
         if kwargs["parquet_directory"] is not None:
             config_params["data"]["parquet_directory"] = kwargs["parquet_directory"]
-        else:
-            config_params["data"]["parquet_directory"] = None
-            
+
     if "ms2_data_path" in kwargs:
         if kwargs["ms2_data_path"] is not None:
             config_params["data"]["ms2_data_path"] = kwargs["ms2_data_path"]
-        else:
-            config_params["data"]["ms2_data_path"] = None
 
     if "ms1_data_path" in kwargs:
         if kwargs["ms1_data_path"] is not None:
             config_params["data"]["ms1_data_path"] = kwargs["ms1_data_path"]
-        else:
-            config_params["data"]["ms1_data_path"] = None
 
     if "batch_size" in kwargs:
         if kwargs["batch_size"] is not None:
