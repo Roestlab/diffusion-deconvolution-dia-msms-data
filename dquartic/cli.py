@@ -154,6 +154,7 @@ def generate_config(config_path):
 @cli.command()
 @click.argument("input-file", type=click.Path(exists=True), required=True)
 @click.argument("output-file", type=click.Path(), required=True)
+@click.option("--isolation_window_index", default=0, help="Index of the isolation window to extract")
 @click.option("--window-size", default=34, help="Retention time window size for data slices")
 @click.option("--sliding-step", default=5, help="Sliding step overlap for retention time windows slices")
 @click.option("--mz-ppm-tol", default=10, help="m/z tolerance in ppm for extracting MS1 data for a given isolation target")
@@ -163,10 +164,10 @@ def generate_config(config_path):
 @click.option("--batch-size", default=10, help="Batch size for generating RT slices")
 @click.option("--num-chunks", default=3, help="Number of chunks to process MS2 data for slicing")
 @click.option("--threads", default=3, help="Threads for number of chunks to process in parallel")
-def generate_train_data(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads):
+def generate_train_data(input_file, output_file, isolation_window_index, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads):
     """
     Generate training data.
     """
     click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info: Generating data slices from - {input_file}")
-    generate_data_slices(input_file, output_file, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads)
+    generate_data_slices(input_file, output_file, isolation_window_index, window_size, sliding_step, mz_ppm_tol, bin_mz, ms1_fixed_mz_size, ms2_fixed_mz_size, batch_size,num_chunks, threads)
     click.echo(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Info:  Saved data slices to - {output_file}")
