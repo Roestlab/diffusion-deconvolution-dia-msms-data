@@ -158,8 +158,8 @@ def process_ms_data_in_chunks(ms_data, windows, num_chunks=3, threads=3):
 
     slices_ms2 = []
     for ms2_slice_chunk in slices_ms2_chunks:
-        print(f"Concatenating {len(ms2_slice_chunk)} slices", flush=True)
-        print(f"Shape of each slice: {[slice.shape for slice in ms2_slice_chunk]}", flush=True)
+        # print(f"Concatenating {len(ms2_slice_chunk)} slices", flush=True)
+        # print(f"Shape of each slice: {[slice.shape for slice in ms2_slice_chunk]}", flush=True)
         
         tmp = np.concatenate((ms2_slice_chunk), axis=1)
         if duplicate_indices.size > 0:
@@ -305,6 +305,7 @@ def generate_data_slices(
 
     for batch_i in tqdm(range(0, len(windows), batch_size)):
         window_batch = windows[batch_i : batch_i + batch_size]
+        print(f"Processing batch {batch_i} to {batch_i + batch_size}", flush=True)
 
         # Process MS1 data
         slices_ms1, unique_rt, unique_mz = process_ms_data(ms1_tgt, window_batch)
