@@ -301,18 +301,19 @@ def generate_data_slices(
 
     # List to store tables
     all_tables = []
+    batch_counter = 0
 
     for batch_i in tqdm(range(0, len(windows), batch_size)):
         window_batch = windows[batch_i : batch_i + batch_size]
-        
+
         # Process MS1 data
         slices_ms1, unique_rt, unique_mz = process_ms_data(ms1_tgt, window_batch)
-        
+
         # Process MS2 data
         slices_ms2, unique_mz_ms2 = process_ms_data_in_chunks(
             ms2_tgt, window_batch, num_chunks, threads
         )
-        
+
         # Create Parquet data
         table = create_parquet_data(
             input_file,
@@ -323,21 +324,38 @@ def generate_data_slices(
             unique_mz,
             unique_mz_ms2,
         )
-        
+
         # Accumulate table
         all_tables.append(table)
-        
+
         # Clear variables to free up memory
         del slices_ms1, slices_ms2, table
 
-    # Concatenate all tables into a single table
-    final_table = pa.concat_tables(all_tables)
+        # Check if all_tables has grown too large
+        # Do this to avoid OOM errors
+        if len(all_tables) >= 1000:
+            intermediate_table = pa.concat_tables(all_tables)
+            if batch_counter == 0:
+                pq.write_table(intermediate_table, output_file, compression='snappy')
+            else:
+                with pq.ParquetWriter(output_file, intermediate_table.schema, compression='snappy') as writer:
+                    writer.write_table(intermediate_table)
 
-    # Write to Parquet file (single write operation)
-    pq.write_table(final_table, output_file)
+            # Clear accumulated tables
+            all_tables.clear()
+            batch_counter += 1
+
+    # Write remaining tables to Parquet if any
+    if all_tables:
+        final_table = pa.concat_tables(all_tables)
+        if batch_counter == 0:
+            pq.write_table(final_table, output_file, compression='snappy')
+        else:
+            with pq.ParquetWriter(output_file, final_table.schema, compression='snappy') as writer:
+                writer.write_table(final_table)
 
     # Clear memory
-    del all_tables, final_table
+    del all_tables
 
     del ms1_tgt, ms2_tgt
 
