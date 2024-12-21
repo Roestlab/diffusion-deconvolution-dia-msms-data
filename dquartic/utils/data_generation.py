@@ -1,4 +1,5 @@
 import os
+import datetime
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -7,6 +8,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
 from memory_profiler import profile
+import gc
+import tracemalloc
 import psutil
 import concurrent.futures
 
@@ -264,7 +267,7 @@ def generate_data_slices(
         if end <= num_points:
             window = unique_sorted_rt[start:end].to_list()
             windows.append(window)
-    print(f"Number of RT window slcies: {len(windows)}")
+    print(f"[{datetime.datetime.now().isoformat()}] Number of RT window slcies: {len(windows)}")
 
     schema = pa.schema(
         [
@@ -290,7 +293,7 @@ def generate_data_slices(
     current_iso = loader.iso_win_info.to_pandas().iloc[isolation_window_index]
 
     print(
-        f"{isolation_window_index} of {len(loader.iso_win_info)} Processing isolation target {current_iso['ISOLATION_TARGET']}"
+        f"[{datetime.datetime.now().isoformat()}] {isolation_window_index} of {len(loader.iso_win_info)} Processing isolation target {current_iso['ISOLATION_TARGET']}"
     )
     ms1_tgt = loader.extract_ms1_slice(current_iso, mz_ppm_tol, bin_mz, ms1_fixed_mz_size)
     ms2_tgt = loader.extract_ms2_slice(current_iso, bin_mz, ms2_fixed_mz_size)
@@ -305,7 +308,7 @@ def generate_data_slices(
 
     for batch_i in tqdm(range(0, len(windows), batch_size)):
         window_batch = windows[batch_i : batch_i + batch_size]
-        print(f"Processing batch {batch_i} to {batch_i + batch_size}", flush=True)
+        print(f"[{datetime.datetime.now().isoformat()}] Processing batch {batch_i} to {batch_i + batch_size}", flush=True)
 
         # Process MS1 data
         slices_ms1, unique_rt, unique_mz = process_ms_data(ms1_tgt, window_batch)
@@ -334,30 +337,58 @@ def generate_data_slices(
 
         # Check if all_tables has grown too large
         # Do this to avoid OOM errors
-        if len(all_tables) >= 1000:
+        if len(all_tables) >= 20:
+            print(f"[{datetime.datetime.now().isoformat()}] Writing out batch of data...", flush=True)
+            # Measure memory usage before deletion
+            tracemalloc.start()
+            snapshot1 = tracemalloc.take_snapshot()
             intermediate_table = pa.concat_tables(all_tables)
             if batch_counter == 0:
                 pq.write_table(intermediate_table, output_file, compression='snappy')
             else:
                 with pq.ParquetWriter(output_file, intermediate_table.schema, compression='snappy') as writer:
                     writer.write_table(intermediate_table)
-
+            # Remove the intermediate table from memory
+            del intermediate_table
+            
             # Clear accumulated tables
             all_tables.clear()
+            
+            # Force garbage collection to ensure memory release
+            gc.collect()
+            
+            # Measure memory usage after deletion
+            snapshot2 = tracemalloc.take_snapshot()
+            stats = snapshot2.compare_to(snapshot1, 'lineno')
+            print(f"[{datetime.datetime.now().isoformat()}] Memory released: {stats[0].size_diff / 10**9:.2f} GB", flush=True)
+            
             batch_counter += 1
 
+    # Measure memory usage before deletion
+    tracemalloc.start()
+    snapshot1 = tracemalloc.take_snapshot()
     # Write remaining tables to Parquet if any
     if all_tables:
+        print(f"[{datetime.datetime.now().isoformat()}] Writing out remaining data...", flush=True)
         final_table = pa.concat_tables(all_tables)
         if batch_counter == 0:
             pq.write_table(final_table, output_file, compression='snappy')
         else:
             with pq.ParquetWriter(output_file, final_table.schema, compression='snappy') as writer:
                 writer.write_table(final_table)
+        del final_table
 
     # Clear memory
     del all_tables
 
     del ms1_tgt, ms2_tgt
+    
+    # Force garbage collection to ensure memory release
+    gc.collect()
+    
+    # Measure memory usage after deletion
+    snapshot2 = tracemalloc.take_snapshot()
+    stats = snapshot2.compare_to(snapshot1, 'lineno')
+    print(f"[{datetime.datetime.now().isoformat()}] Memory released: {stats[0].size_diff / 10**9:.2f} GB", flush=True)
 
     pq_writer.close()
