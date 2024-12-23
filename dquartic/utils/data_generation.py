@@ -237,6 +237,7 @@ def generate_data_slices(
     ms1_fixed_mz_size=150,
     ms2_fixed_mz_size=30_000,
     batch_size=500,
+    batch_writing_size=20,
     num_chunks=3, 
     threads=3
 ):
@@ -337,17 +338,13 @@ def generate_data_slices(
 
         # Check if all_tables has grown too large
         # Do this to avoid OOM errors
-        if len(all_tables) >= 20:
+        if len(all_tables) >= batch_writing_size:
             print(f"[{datetime.datetime.now().isoformat()}] Writing out batch of data...", flush=True)
             # Measure memory usage before deletion
             tracemalloc.start()
             snapshot1 = tracemalloc.take_snapshot()
             intermediate_table = pa.concat_tables(all_tables)
-            if batch_counter == 0:
-                pq.write_table(intermediate_table, output_file, compression='snappy')
-            else:
-                with pq.ParquetWriter(output_file, intermediate_table.schema, compression='snappy') as writer:
-                    writer.write_table(intermediate_table)
+            pq_writer.write_table(intermediate_table)
             # Remove the intermediate table from memory
             del intermediate_table
             
@@ -371,11 +368,7 @@ def generate_data_slices(
     if all_tables:
         print(f"[{datetime.datetime.now().isoformat()}] Writing out remaining data...", flush=True)
         final_table = pa.concat_tables(all_tables)
-        if batch_counter == 0:
-            pq.write_table(final_table, output_file, compression='snappy')
-        else:
-            with pq.ParquetWriter(output_file, final_table.schema, compression='snappy') as writer:
-                writer.write_table(final_table)
+        pq_writer.write_table(final_table)
         del final_table
 
     # Clear memory
