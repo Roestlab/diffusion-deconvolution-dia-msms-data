@@ -27,7 +27,7 @@ We currently have access to a set of clean MS2 data which we plan to use to gene
 First, clone the repository to your local machine:
 
 ```bash
-git clone git@github.com:hackbio-ca/diffusion-deconvolution-dia-msms.git
+git clone https://github.com/Roestlab/diffusion-deconvolution-dia-msms-data.git
 cd diffusion-deconvolution-dia-msms
 ```
 
