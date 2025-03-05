@@ -57,29 +57,27 @@ pip install .
 
 ## Quick Start
 
-The library has a CLI for training the diffusion model.
+The library has a CLI for training the diffusion model. Most configurations can be set via the [dquartic_train_config.json config file](https://github.com/Roestlab/diffusion-deconvolution-dia-msms-data/blob/main/dquartic_train_config.json)
 
 ```bash
 $ dquartic train --help
-Usage: dquartic train [OPTIONS]
+Usage: dquartic train [OPTIONS] CONFIG_PATH
 
   Train a DDIM model on the DIAMS dataset.
 
 Options:
-  --epochs INTEGER         Number of epochs to train
-  --warmup-epochs INTEGER  Number of warmup epochs for learning rate scheduler
-  --batch-size INTEGER     Batch size for training
-  --learning-rate FLOAT    Learning rate for optimizer
-  --hidden-dim INTEGER     Hidden dimension for the model
-  --num-heads INTEGER      Number of attention heads
-  --num-layers INTEGER     Number of transformer layers
-  --normalize TEXT         Normalization method. (None, minmax)
-  --ms2-data-path TEXT     Path to MS2 data
-  --ms1-data-path TEXT     Path to MS1 data
-  --checkpoint-path TEXT   Path to save the best model
-  --use-wandb              Enable Weights & Biases logging
-  --threads INTEGER        Number of threads for data loading
-  --help                   Show this message and exit.
+  --parquet_directory TEXT  Path to the directory containing the Parquet files
+                            containing the MS1 and MS2 data. Mutually
+                            exclusive with `ms2_file` and `ms1_file`. Overides
+                            config file
+  --ms2-data-path TEXT      Path to MS2 data, overides config file
+  --ms1-data-path TEXT      Path to MS1 data, overides config file
+  --batch-size TEXT         Batch size for training, overides config file
+  --checkpoint-path TEXT    Path to save the best model, overides config file
+  --use-wandb TEXT          Use wandb for logging, overides config file
+  --threads TEXT            Number of threads for data loading, overides
+                            config file
+  --help                    Show this message and exit.
 ```
 
 ## Usage
