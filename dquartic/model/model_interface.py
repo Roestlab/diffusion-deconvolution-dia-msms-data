@@ -193,6 +193,48 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
         )
         return LambdaLR(optimizer, lr_lambda, last_epoch)
 
+class CallbackHandler:
+    """
+    A CallbackHandler class that can be used to add callbacks to the training process for both
+    epoch-level and batch-level events. To have more control over the training process, you can
+    create a subclass of this class and override the methods you need.
+    """
+
+    def epoch_callback(self, epoch: int, epoch_loss: float) -> bool:
+        """
+        This method will be called at the end of each epoch. The callback can also be used to
+        stop the training by returning False. If the return value is None, or True, the training
+        will continue.
+
+        Parameters
+        ----------
+        epoch : int
+            The current epoch number.
+        epoch_loss : float
+            The loss value of the current epoch.
+
+        Returns
+        -------
+        continue_training : bool
+            If False, the training will stop.
+        """
+        continue_training = True
+        return continue_training
+
+    def batch_callback(self, batch: int, batch_loss: float):
+        """
+        This method will be called at the end of each batch.
+
+        Parameters
+        ----------
+        batch : int
+            The current batch number.
+        batch_loss : float
+            The loss value of the current batch.
+
+        """
+        pass
+
 class ModelInterface(object):
     """
     Provides standardized methods to interact with ML models. Inherit into a new class and override
