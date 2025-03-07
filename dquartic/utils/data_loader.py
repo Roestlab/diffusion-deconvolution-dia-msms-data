@@ -92,7 +92,7 @@ class DIAMSDataset(Dataset):
         self.used_pairs.clear()
         self.epoch_reset = True
         
-    def read_parquet_meta(self,parquet_directory):
+    def read_parquet_meta(self, parquet_directory):
         """
         Read the metadata from the Parquet files.
         Args:
