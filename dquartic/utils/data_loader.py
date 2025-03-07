@@ -38,6 +38,7 @@ class DIAMSDataset(Dataset):
             print(f"Info: Loaded  {len(self.ms2_data)} MS2 slice samples and {len(self.ms1_data)} MS1 slice samples from NPY files.")
         elif parquet_directory is not None and ms1_file is None and ms2_file is None:
             self.meta_df = self.read_parquet_meta(parquet_directory)
+            self.parquet_directory = parquet_directory  
             self.data_type = "parquet"
             print(f"Info: Loaded {len(self.meta_df)} MS2 slice samples and MS1 slice samples from Parquet files.")
         else:
@@ -48,7 +49,10 @@ class DIAMSDataset(Dataset):
         self.epoch_reset = False
 
     def __len__(self):
-        return len(self.ms2_data)
+        if self.data_type=="parquet":
+            return len(self.meta_df)
+        else:
+            return len(self.ms2_data)
 
     def __getitem__(self, idx):
         """
@@ -153,7 +157,7 @@ class DIAMSDataset(Dataset):
             break
 
         return ms2_sample_split_1, ms1_sample_split_1, ms2_sample_split_2, ms1_sample_split_2
-    
+           
     def _get_parquet_data(self, row):
         """Get the MS2 and MS1 samples from Parquet files."""
         query = f"""
@@ -162,7 +166,7 @@ class DIAMSDataset(Dataset):
                 ms1_data, 
                 ms2_shape, 
                 ms1_shape 
-            FROM './*.parquet'
+            FROM '{self.parquet_directory}/*.parquet'
             WHERE slice_index = {row['slice_index']}
             AND mz_isolation_target = {row['mz_isolation_target']}
             AND mz_start = {row['mz_start']}
@@ -179,4 +183,3 @@ class DIAMSDataset(Dataset):
         ms1_data = np.array(ms1_data).reshape(ms1_shape)
 
         return ms1_data, ms2_data
-
