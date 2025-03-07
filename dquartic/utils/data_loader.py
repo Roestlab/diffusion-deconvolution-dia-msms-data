@@ -38,7 +38,7 @@ class DIAMSDataset(Dataset):
             print(f"Info: Loaded  {len(self.ms2_data)} MS2 slice samples and {len(self.ms1_data)} MS1 slice samples from NPY files.")
         elif parquet_directory is not None and ms1_file is None and ms2_file is None:
             self.meta_df = self.read_parquet_meta(parquet_directory)
-            self.parquet_directory = parquet_directory  # Store the directory path
+            self.parquet_directory = parquet_directory  
             self.data_type = "parquet"
             print(f"Info: Loaded {len(self.meta_df)} MS2 slice samples and MS1 slice samples from Parquet files.")
         else:
