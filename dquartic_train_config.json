@@ -1,7 +1,8 @@
 {
     "data":{
-        "ms2_data_path": "data/MS2_data.csv",
-        "ms1_data_path": "data/MS1_data.csv",
+        "parquet_directory": "data/",
+        "ms2_data_path": null,
+        "ms1_data_path": null,
         "normalize": "minmax"
     },
     "model":{
@@ -11,25 +12,27 @@
         "batch_size": 1,
         "learning_rate": 0.00001,
         "num_timesteps": 1000,
-        "beta_start": 0.001,
-        "beta_end": 0.00125,
+        "beta_schedule_type": "cosine",
         "pred_type": "eps",
+        "auto_normalize": true,
         "ms1_loss_weight": 0.0,
-        "auto_normalize": false,
-        "use_model": "Unet1D",
+        "use_model": "UNet1d",
         "CustomTransformer":{
             "input_dim": 40000,
             "hidden_dim": 1024,
             "num_heads": 8,
             "num_layers": 8
         },
-        "Unet1D" : {
+        "UNet1d" : {
             "dim": 4,
             "channels": 1,
             "dim_mults": [1, 2, 2, 3, 3, 4, 4],
-            "cond_channels": 1,
-            "cond_init_dim": 4,
-            "has_condition": true
+            "conditional": true,
+            "init_cond_channels": 1,
+            "attn_cond_channels": 1,
+            "tfer_dim_mult": 620,
+            "downsample_dim": 40000,
+            "simple": true
         }
     },
     "wandb": {
@@ -38,7 +41,7 @@
         "wandb_name": null,
         "wandb_id": null,
         "wandb_resume": null,
-        "wandb_architecture": "DDIM(Unet1D)",
+        "wandb_architecture": "DDIM(UNet1d)",
         "wandb_dataset": "MS2",
         "wandb_mode": "offline"
     },

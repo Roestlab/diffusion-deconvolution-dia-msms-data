@@ -14,8 +14,22 @@ def load_train_config(config_path: str, **kwargs):
     """
     with open(config_path, "r") as f:
         config_params = json.load(f)
+    
+    # Default values for missing parameters in json file
+    if "parquet_directory" not in config_params["data"]:
+        config_params["data"]["parquet_directory"] = None
+        
+    if "ms2_data_path" not in config_params["data"]:
+        config_params["data"]["ms2_data_path"] = None
+    
+    if "ms1_data_path" not in config_params["data"]:
+        config_params["data"]["ms1_data_path"] = None
 
     # Override the config params with the keyword arguments
+    if "parquet_directory" in kwargs:
+        if kwargs["parquet_directory"] is not None:
+            config_params["data"]["parquet_directory"] = kwargs["parquet_directory"]
+
     if "ms2_data_path" in kwargs:
         if kwargs["ms2_data_path"] is not None:
             config_params["data"]["ms2_data_path"] = kwargs["ms2_data_path"]
@@ -52,8 +66,9 @@ def generate_train_config(config_path: str):
     """
     full_config = {
         "data": {
-            "ms2_data_path": "data/MS2_data.csv",
-            "ms1_data_path": "data/MS1_data.csv",
+            "parquet_directory": "data/",
+            "ms2_data_path": None,
+            "ms1_data_path": None,
             "normalize": "minmax",
         },
         "model": {
@@ -63,25 +78,27 @@ def generate_train_config(config_path: str):
             "batch_size": 1,
             "learning_rate": 0.00001,
             "num_timesteps": 1000,
-            "beta_start": 0.001,
-            "beta_end": 0.00125,
+            "beta_schedule_type": "cosine",
             "pred_type": "eps",
+            "auto_normalize": True,
             "ms1_loss_weight": 0.0,
-            "auto_normalize": False,
-            "use_model": "Unet1D",
+            "use_model": "UNet1d",
             "CustomTransformer": {
                 "input_dim": 40000,
                 "hidden_dim": 1024,
                 "num_heads": 8,
                 "num_layers": 8,
             },
-            "Unet1D": {
+            "UNet1d": {
                 "dim": 4,
                 "channels": 1,
                 "dim_mults": [1, 2, 2, 3, 3, 4, 4],
-                "cond_channels": 1,
-                "cond_init_dim": 4,
-                "has_condition": True,
+                "conditional": True,
+                "init_cond_channels": 1,
+                "attn_cond_channels": 1,
+                "tfer_dim_mult": 620,
+                "downsample_dim": 40000,
+                "simple": True,
             },
         },
         "wandb": {
@@ -90,7 +107,7 @@ def generate_train_config(config_path: str):
             "wandb_name": None,
             "wandb_id": None,
             "wandb_resume": None,
-            "wandb_architecture": "DDIM(Unet1D)",
+            "wandb_architecture": "DDIM(UNet1d)",
             "wandb_dataset": "MS2",
             "wandb_mode": "offline",
         },

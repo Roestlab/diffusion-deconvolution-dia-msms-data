@@ -12,7 +12,27 @@ from PIL import Image as PILImage
 
 
 class LR_SchedulerInterface(object):
+    """
+    An interface for learning rate schedulers. This class should be inherited and the methods
+    should be implemented in the subclass.
+
+    Attributes
+    ----------
+    optimizer : torch.optim.Optimizer
+        The optimizer for which to schedule the learning rate.
+    """
+
     def __init__(self, optimizer: torch.optim.Optimizer, **kwargs):
+        """
+        Initialize the learning rate scheduler interface.
+
+        Parameters
+        ----------
+        optimizer : torch.optim.Optimizer
+            The optimizer for which to schedule the learning rate.
+        kwargs : dict
+            Additional arguments for the scheduler.
+        """
         raise NotImplementedError
 
     def step(self, epoch: int, loss: float):
@@ -54,6 +74,22 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
         num_cycles: float = 0.5,
         last_epoch: int = -1,
     ):
+        """
+        Initialize the WarmupLR_Scheduler.
+
+        Parameters
+        ----------
+        optimizer : torch.optim.Optimizer
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps : int
+            The number of steps for the warmup phase.
+        num_training_steps : int
+            The total number of training steps.
+        num_cycles : float, optional
+            The number of waves in the cosine schedule, defaults to 0.5.
+        last_epoch : int, optional
+            The index of the last epoch when resuming training, defaults to -1.
+        """
         self.optimizer = optimizer
         self.lambda_lr = self.get_cosine_schedule_with_warmup(
             optimizer, num_warmup_steps, num_training_steps, num_cycles, last_epoch
@@ -65,9 +101,10 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
 
         Parameters
         ----------
-        epoch : int (Deprecated)
-            The current epoch number.
-
+        epoch : int, optional
+            The current epoch number, deprecated.
+        loss : float, optional
+            The loss value of the current epoch, not used.
         """
         return self.lambda_lr.step()
 
@@ -82,9 +119,6 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
         """
         return self.lambda_lr.get_last_lr()
 
-    # `transformers.optimization.get_cosine_schedule_with_warmup` will import tensorflow,
-    # resulting in some package version issues.
-    # Here we copy the code from transformers.optimization
     def _get_cosine_schedule_with_warmup_lr_lambda(
         self,
         current_step: int,
@@ -93,6 +127,25 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
         num_training_steps: int,
         num_cycles: float,
     ):
+        """
+        Compute the learning rate lambda for the cosine schedule with warmup.
+
+        Parameters
+        ----------
+        current_step : int
+            The current step number.
+        num_warmup_steps : int
+            The number of steps for the warmup phase.
+        num_training_steps : int
+            The total number of training steps.
+        num_cycles : float
+            The number of waves in the cosine schedule.
+
+        Returns
+        -------
+        float
+            The learning rate lambda.
+        """
         if current_step < num_warmup_steps:
             return float(current_step + 1) / float(max(1, num_warmup_steps))
 
@@ -114,23 +167,24 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
         initial lr set in the optimizer to 0, after a warmup period during which it increases linearly between 0 and the
         initial lr set in the optimizer.
 
-        Args:
-            optimizer ([`~torch.optim.Optimizer`]):
-                The optimizer for which to schedule the learning rate.
-            num_warmup_steps (`int`):
-                The number of steps for the warmup phase.
-            num_training_steps (`int`):
-                The total number of training steps.
-            num_cycles (`float`, *optional*, defaults to 0.5):
-                The number of waves in the cosine schedule (the defaults is to just decrease from the max value to 0
-                following a half-cosine).
-            last_epoch (`int`, *optional*, defaults to -1):
-                The index of the last epoch when resuming training.
+        Parameters
+        ----------
+        optimizer : torch.optim.Optimizer
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps : int
+            The number of steps for the warmup phase.
+        num_training_steps : int
+            The total number of training steps.
+        num_cycles : float, optional
+            The number of waves in the cosine schedule, defaults to 0.5.
+        last_epoch : int, optional
+            The index of the last epoch when resuming training, defaults to -1.
 
-        Return:
-            `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
+        Returns
+        -------
+        torch.optim.lr_scheduler.LambdaLR
+            The learning rate scheduler with the appropriate schedule.
         """
-
         lr_lambda = functools.partial(
             self._get_cosine_schedule_with_warmup_lr_lambda,
             num_warmup_steps=num_warmup_steps,
@@ -138,7 +192,6 @@ class WarmupLR_Scheduler(LR_SchedulerInterface):
             num_cycles=num_cycles,
         )
         return LambdaLR(optimizer, lr_lambda, last_epoch)
-
 
 class CallbackHandler:
     """
@@ -182,12 +235,10 @@ class CallbackHandler:
         """
         pass
 
-
 class ModelInterface(object):
     """
-    Provides standardized methods to interact
-    with ml models. Inherit into new class and override
-    the abstract (i.e. not implemented) methods.
+    Provides standardized methods to interact with ML models. Inherit into a new class and override
+    the abstract (i.e., not implemented) methods.
     """
 
     #################
@@ -201,11 +252,16 @@ class ModelInterface(object):
         **kwargs,
     ):
         """
+        Initialize the ModelInterface.
+
         Parameters
         ----------
-
+        device : str, optional
+            The device to use for training and inference, defaults to "cuda" if available, otherwise "cpu".
         min_pred_value : float, optional
-            See :attr:`min_pred_value`, defaults to 0.0.
+            The minimum prediction value, defaults to 0.0.
+        kwargs : dict
+            Additional arguments for the model.
         """
         self.model: torch.nn.Module = None
         self.optimizer = None
@@ -214,7 +270,7 @@ class ModelInterface(object):
         self.lr_scheduler_class = WarmupLR_Scheduler
         self.callback_handler = CallbackHandler()
         self.device = device
-        
+
         # Set by DDIM subclass
         self.ms1_loss_weight = None
 
@@ -231,25 +287,61 @@ class ModelInterface(object):
     def build(self, model_class, **kwargs):
         """
         Build the model.
+
+        Parameters
+        ----------
+        model_class : torch.nn.Module
+            The class of the model to build.
+        kwargs : dict
+            Additional arguments for the model.
         """
         self.model = model_class
         self._init_for_training()
 
     def get_parameter_num(self):
         """
-        Get total number of parameters in model.
+        Get the total number of parameters in the model.
+
+        Returns
+        -------
+        int
+            The total number of parameters in the model.
         """
         return np.sum([p.numel() for p in self.model.parameters()])
 
-    def train_step(self, x_start, x_cond, noise=None, ms1_loss_weight=0.0):
+    def train_step(self, x_0, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
         """
         Perform a single training step. Implemented in the subclass.
+
+        Parameters
+        ----------
+        x_0 : torch.Tensor
+            The input tensor.
+        ms2_cond : torch.Tensor, optional
+            The MS2 condition tensor, defaults to None.
+        ms1_cond : torch.Tensor, optional
+            The MS1 condition tensor, defaults to None.
+        noise : torch.Tensor, optional
+            The noise tensor, defaults to None.
+        ms1_loss_weight : float, optional
+            The weight for the MS1 loss, defaults to 0.0.
         """
         raise NotImplementedError
 
-    def sample(self, x_start, x_cond, num_steps=1000):
+    def sample(self, x_t, ms2_cond=None, ms1_cond=None, num_steps=1000):
         """
         Generate samples from the model. Implemented in the subclass.
+
+        Parameters
+        ----------
+        x_t : torch.Tensor
+            The input tensor.
+        ms2_cond : torch.Tensor, optional
+            The MS2 condition tensor, defaults to None.
+        ms1_cond : torch.Tensor, optional
+            The MS1 condition tensor, defaults to None.
+        num_steps : int, optional
+            The number of steps for sampling, defaults to 1000.
         """
         raise NotImplementedError
 
@@ -260,18 +352,34 @@ class ModelInterface(object):
         num_warmup_steps=5,
         learning_rate=1e-4,
         use_wandb=True,
+        log_every_n_epochs=100,
         checkpoint_path="best_model.ckpt",
     ):
         """
-        Train the model according to specifications. Includes a warumup
-        phase with linear increasing and cosine decreasing for lr scheduling).
-        """
+        Train the model according to specifications. Includes a warmup phase with linear increasing
+        and cosine decreasing for learning rate scheduling.
 
-        self._set_lr(learning_rate)
+        Parameters
+        ----------
+        dataloader : torch.utils.data.DataLoader
+            The dataloader for training.
+        num_epochs : int
+            The number of epochs to train.
+        num_warmup_steps : int, optional
+            The number of warmup steps, defaults to 5.
+        learning_rate : float, optional
+            The learning rate, defaults to 1e-4.
+        use_wandb : bool, optional
+            Whether to use Weights and Biases for logging, defaults to True.
+        log_every_n_epochs : int, optional
+            The frequency of logging, defaults to every 100 epochs.
+        checkpoint_path : str, optional
+            The path to save the checkpoint, defaults to "best_model.ckpt".
+        """
+        self._prepare_training(learning_rate)
         # Initialize the learning rate scheduler
         lr_scheduler = self._get_lr_schedule_with_warmup(num_warmup_steps, num_epochs)
 
-        # model = diffusion_model.model
         self.model.train()
 
         # Load checkpoint if available
@@ -283,7 +391,7 @@ class ModelInterface(object):
 
         best_epoch = start_epoch
 
-        for epoch in range(num_epochs):
+        for epoch in range(start_epoch, num_epochs):
             dataloader.dataset.reset_epoch()
 
             batch_loss = self._train_one_epoch(epoch, dataloader)
@@ -320,14 +428,15 @@ class ModelInterface(object):
                 best_loss = avg_train_loss
                 best_epoch = epoch + 1
                 self.save_checkpoint(lr_scheduler, epoch, best_loss, checkpoint_path)
-                if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 100 == 0)):
-                    self.log_single_prediction(
-                        best_epoch,
-                        best_loss,
-                        dataloader,
-                        num_steps=[100, 500, 1000],
-                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}"
-                    )
+
+            if use_wandb and (epoch == 0 or epoch % log_every_n_epochs == 0):
+                self.log_single_prediction(
+                    best_epoch,
+                    best_loss,
+                    dataloader,
+                    num_steps=[100, 500, 1000],
+                    path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
+                )
 
             continue_training = self.callback_handler.epoch_callback(
                 epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -335,27 +444,47 @@ class ModelInterface(object):
             if not continue_training:
                 print(f"Training stopped at epoch {epoch}")
                 break
-                
-            torch.cuda.empty_cache()
-            
-        print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
 
+            torch.cuda.empty_cache()
+
+        print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
+        
+        
     def train(
-        self,
-        dataloader,
-        batch_size,
-        epochs,
-        warmup_epochs: int = 5,
-        learning_rate: float = 1e-4,
-        use_wandb: bool = False,
-        checkpoint_path: str = "best_model.ckpt",
-        **kwargs,
-    ):
+    self,
+    dataloader,
+    batch_size,
+    epochs,
+    warmup_epochs: int = 5,
+    learning_rate: float = 1e-4,
+    use_wandb: bool = False,
+    checkpoint_path: str = "best_model.ckpt",
+    **kwargs,
+):
         """
         Train the model with the given dataloader for the given number of epochs.
+
+        Parameters
+        ----------
+        dataloader : torch.utils.data.DataLoader
+            The dataloader for training.
+        batch_size : int
+            The batch size for training.
+        epochs : int
+            The number of epochs to train.
+        warmup_epochs : int, optional
+            The number of warmup epochs, defaults to 5.
+        learning_rate : float, optional
+            The learning rate, defaults to 1e-4.
+        use_wandb : bool, optional
+            Whether to use Weights and Biases for logging, defaults to False.
+        checkpoint_path : str, optional
+            The path to save the checkpoint, defaults to "best_model.ckpt".
+        kwargs : dict
+            Additional arguments for the training process.
         """
         print(f"Info: Training {self.__repr__}")
-        
+
         if warmup_epochs > 0:
             self.train_with_warmup(
                 dataloader,
@@ -408,15 +537,15 @@ class ModelInterface(object):
                     best_epoch = epoch + 1
                     self.save_checkpoint(None, epoch, best_loss, checkpoint_path)
 
-                    # Only log predictions if using wandb and for the firt epoch and then only after epoch 15 every 100 epochs if the loss is still the best
-                    if use_wandb and (epoch == 0 or (epoch > 15 and epoch % 100 == 0)):
-                        self.log_single_prediction(
-                            best_epoch,
-                            best_loss,
-                            dataloader,
-                            num_steps=[100, 500, 1000],
-                            path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}"
-                        )
+                # Only log predictions if using wandb and for the first epoch and then only after every 100 epochs
+                if use_wandb and (epoch == 0 or epoch % 100 == 0):
+                    self.log_single_prediction(
+                        best_epoch,
+                        best_loss,
+                        dataloader,
+                        num_steps=[100, 500, 1000],
+                        path=f"{os.path.dirname(checkpoint_path)}{os.path.sep}",
+                    )
 
                 continue_training = self.callback_handler.epoch_callback(
                     epoch=epoch, epoch_loss=np.mean(batch_loss)
@@ -424,14 +553,32 @@ class ModelInterface(object):
                 if not continue_training:
                     print(f"Training stopped at epoch {epoch}")
                     break
-                
+
                 torch.cuda.empty_cache()
-                
+
             print(f"Best model checkpoint saved at epoch {best_epoch} with loss: {best_loss:.6f}")
 
     def load_checkpoint(self, scheduler, checkpoint_path, device):
         """
         Load model, optimizer, and scheduler states from a checkpoint file if available.
+
+        Parameters
+        ----------
+        scheduler : torch.optim.lr_scheduler._LRScheduler
+            The learning rate scheduler.
+        checkpoint_path : str
+            The path to the checkpoint file.
+        device : torch.device
+            The device to load the checkpoint on.
+
+        Returns
+        -------
+        int
+            The epoch to resume training from.
+        float
+            The best loss value.
+        torch.optim.lr_scheduler._LRScheduler
+            The learning rate scheduler.
         """
         if os.path.exists(checkpoint_path):
             print(f"Loading checkpoint from {checkpoint_path}...")
@@ -455,6 +602,17 @@ class ModelInterface(object):
     def save_checkpoint(self, scheduler, epoch, best_loss, checkpoint_path):
         """
         Save the current state of the model, optimizer, and scheduler to a checkpoint file.
+
+        Parameters
+        ----------
+        scheduler : torch.optim.lr_scheduler._LRScheduler
+            The learning rate scheduler.
+        epoch : int
+            The current epoch number.
+        best_loss : float
+            The best loss value.
+        checkpoint_path : str
+            The path to save the checkpoint file.
         """
         torch.save(
             {
@@ -470,38 +628,77 @@ class ModelInterface(object):
         )
 
     def predict(self, dataloader, mixture_weights=(0.5, 0.5), num_steps=1000):
+        """
+        Predict using the model with the given dataloader.
+
+        Parameters
+        ----------
+        dataloader : torch.utils.data.DataLoader
+            The dataloader for prediction.
+        mixture_weights : tuple, optional
+            The weights for the mixture of the two samples, defaults to (0.5, 0.5).
+        num_steps : int, optional
+            The number of steps for prediction, defaults to 1000.
+
+        Returns
+        -------
+        np.ndarray
+            The predictions.
+        """
         self.model.eval()
         preds = np.array([])
         for ms2_1, ms1_1, ms2_2, ms1_2 in dataloader:
-            x_start, x_cond = ms2_1, ms1_1
-            x_start = x_start.to(self.device)
-            x_cond = x_cond.to(self.device)
+            x_0, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
             # Simulated mixed spectra from target sample and other sample
-            x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
-            x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
-            pred, _ = self._predict_one_batch(x_start_rand, x_cond, num_steps)
-            # Store ms2_1, ms1_1, x_start_rand, pred
+            ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (
+                ms2_2 * mixture_weights[1]
+            ).to(self.device)
+            pred, _ = self._predict_one_batch(
+                x_0, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+            )
+            # Store ms2_1, ms1_1, mixture, pred
             pred_data = {
-                "ms2_1": ms2_1,
-                "ms1_1": ms1_1,
-                "x_start_rand": x_start_rand.cpu().detach().numpy(),
-                "pred": pred,
+                "ms2_1": ms2_1.cpu().detach().numpy(),
+                "ms1_1": ms1_1.cpu().detach().numpy(),
+                "mixture": ms2_cond.cpu().detach().numpy(),
+                "pred": pred.cpu().detach().numpy(),
             }
             preds = np.append(preds, pred_data)
         return preds
 
     def log_single_prediction(
-        self,
-        epoch,
-        loss,
-        dataloader,
-        sample_idx=None,
-        mixture_weights=(0.5, 0.5),
-        num_steps=[100, 500, 1000],
-        backend="ms_plotly",
-        path="./"
-    ):
-        """Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2."""
+    self,
+    epoch,
+    loss,
+    dataloader,
+    sample_idx=None,
+    mixture_weights=(0.5, 0.5),
+    num_steps=[100, 500, 1000],
+    backend="ms_plotly",
+    path="./",
+):
+        """
+        Log a wandb.Table with matplotlib figures for Target MS2, Target MS1, Random MS2 Input, and Predicted MS2.
+
+        Parameters
+        ----------
+        epoch : int
+            The current epoch number.
+        loss : float
+            The loss value of the current epoch.
+        dataloader : torch.utils.data.DataLoader
+            The dataloader for prediction.
+        sample_idx : int, optional
+            The index of the sample to plot, defaults to None, in which case a random sample is chosen.
+        mixture_weights : tuple, optional
+            The weights for the mixture of the two samples, defaults to (0.5, 0.5).
+        num_steps : list, optional
+            The number of steps for prediction, defaults to [100, 500, 1000].
+        backend : str, optional
+            The backend for plotting, defaults to "ms_plotly".
+        path : str, optional
+            The path to save the plots, defaults to "./".
+        """
         # Create a wandb Table to log
         table = wandb.Table(
             columns=[
@@ -516,17 +713,17 @@ class ModelInterface(object):
                 "Predicted MS2",
             ]
         )
-        
+
         if sample_idx is None:
             sample_idx = np.random.randint(len(dataloader.dataset))
-        ms2_1, ms1_1, ms2_2, ms1_2 = dataloader.dataset[sample_idx]
-        x_start, x_cond = ms2_1, ms1_1
-        x_start = x_start.to(self.device).unsqueeze(0)
-        x_cond = x_cond.to(self.device).unsqueeze(0)
+
+        ms2_1, ms1_1, ms2_2, _ = dataloader.dataset[sample_idx]
+        x_0, ms1_cond = ms2_1.to(self.device).unsqueeze(0), ms1_1.to(self.device).unsqueeze(0)
 
         # Simulated mixed spectra from target sample and other sample
-        x_start_rand = (ms2_1 * mixture_weights[0]) + (ms2_2 * mixture_weights[1])
-        x_start_rand = x_start_rand.to(self.device).unsqueeze(0)
+        ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (ms2_2 * mixture_weights[1]).to(
+            self.device
+        ).unsqueeze(0)
 
         for _num_steps in num_steps:
             # Get sample and prediction
@@ -538,25 +735,34 @@ class ModelInterface(object):
                 pred_noise_plot,
                 pred_plot,
             ) = self.plot_single_prediction(
-                ms2_1,
-                ms1_1,
+                x_0,
                 ms2_2,
-                x_start_rand,
-                x_cond,
+                ms2_cond=ms2_cond,
+                ms1_cond=ms1_cond,
                 num_steps=_num_steps,
                 backend=backend,
             )
-            
-            if backend=="ms_matplotlib":
+
+            if backend == "ms_matplotlib":
                 wandb_ms2_target_plot = wandb.Image(
                     PILImage.open(self._convert_mpl_fig_to_bytes(ms2_target_plot.superFig))
                 )
-                wandb_ms1_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig)))
-                wandb_ms2_noise_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig)))
-                wandb_ms2_input_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig)))
-                wandb_pred_noise_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig)))
-                wandb_pred_plot = wandb.Image(PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig)))
-            elif backend=="ms_plotly":
+                wandb_ms1_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms1_plot.superFig))
+                )
+                wandb_ms2_noise_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_noise_plot.superFig))
+                )
+                wandb_ms2_input_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(ms2_input_plot.superFig))
+                )
+                wandb_pred_noise_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(pred_noise_plot.superFig))
+                )
+                wandb_pred_plot = wandb.Image(
+                    PILImage.open(self._convert_mpl_fig_to_bytes(pred_plot.superFig))
+                )
+            elif backend == "ms_plotly":
                 ms2_target_plot.write_html(f"{path}ms2_target_plot.html", auto_play=False)
                 wandb_ms2_target_plot = wandb.Html(f"{path}ms2_target_plot.html")
                 ms1_plot.write_html(f"{path}ms1_plot.html", auto_play=False)
@@ -570,7 +776,9 @@ class ModelInterface(object):
                 pred_plot.write_html(f"{path}pred_plot.html", auto_play=False)
                 wandb_pred_plot = wandb.Html(f"{path}pred_plot.html")
             else:
-                raise ValueError(f"Unknown plotting backend: {backend}. Must be 'ms_matplotlib' or 'ms_plotly'.")
+                raise ValueError(
+                    f"Unknown plotting backend: {backend}. Must be 'ms_matplotlib' or 'ms_plotly'."
+                )
 
             table.add_data(
                 _num_steps,
@@ -587,11 +795,10 @@ class ModelInterface(object):
 
     def plot_single_prediction(
         self,
-        ms2_1,
-        ms1_1,
-        ms2_2,
-        x_start_rand,
-        x_cond,
+        x_0,
+        x_noise,
+        ms2_cond=None,
+        ms1_cond=None,
         num_steps=1000,
         plot_type="peakmap",
         plot_3d=True,
@@ -600,16 +807,30 @@ class ModelInterface(object):
         """
         Plot a matplotlib figure with Target MS2, Target MS1, Random MS2 Input, and Predicted MS2.
 
-        Args:
-            dataloader (torch.utils.data.DataLoader): The dataloader.
-            sample_idx (int, optional): The index of the sample to plot. Defaults to None, in which case a random sample is chosen.
-            mixture_weights (tuple, optional): The weights for the mixture of the two samples. Defaults to (0.5, 0.75).
-            num_steps (int, optional): The number of steps to predict. Defaults to 100.
-            plot_type (str, optional): The type of plot. Defaults to 'peakmap'.
-            plot_3d (bool, optional): Whether to plot in 3D. Defaults to True.
-            backend (str, optional): The backend for plotting. Defaults to 'ms_matplotlib'.
-        """
+        Parameters
+        ----------
+        x_0 : torch.Tensor
+            The input tensor.
+        x_noise : torch.Tensor
+            The noise tensor.
+        ms2_cond : torch.Tensor, optional
+            The MS2 condition tensor, defaults to None.
+        ms1_cond : torch.Tensor, optional
+            The MS1 condition tensor, defaults to None.
+        num_steps : int, optional
+            The number of steps for prediction, defaults to 1000.
+        plot_type : str, optional
+            The type of plot, defaults to 'peakmap'.
+        plot_3d : bool, optional
+            Whether to plot in 3D, defaults to True.
+        backend : str, optional
+            The backend for plotting, defaults to 'ms_matplotlib'.
 
+        Returns
+        -------
+        tuple
+            The plots for Target MS2, Target MS1, Noise MS2, Noised MS2 Input, Predicted Noise MS2, and Predicted MS2.
+        """
         try:
             import pyopenms_viz
         except ImportError:
@@ -617,7 +838,22 @@ class ModelInterface(object):
                 "pyopenms_viz is required for plotting. Install it with `pip install pyopenms_viz`."
             )
 
-        pred, pred_noise = self._predict_one_batch(x_start_rand, x_cond, num_steps)
+        pred, pred_noise = self._predict_one_batch(
+            x_0, ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+        )
+        x_0 = x_0.squeeze(0).cpu().detach().numpy()
+        x_noise = x_noise.cpu().detach().numpy()
+        ms2_cond = ms2_cond.squeeze(0).cpu().detach().numpy()
+        ms1_shape = None
+
+        if ms1_cond.dim() == 2:
+            ms1_shape = "1d"
+            ms1_cond = ms1_cond.cpu().detach().numpy()
+        elif ms1_cond.dim() == 3:
+            ms1_shape = "2d"
+            ms1_cond = ms1_cond.squeeze(0).cpu().detach().numpy()
+        else:
+            raise ValueError(f"Unknown ms1_cond shape: {ms1_cond.shape}")
 
         pred_noise_df = self._ms2_mesh_to_df(pred_noise)
         pred_noise_plot = pred_noise_df.plot(
@@ -653,7 +889,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_mesh_df = self._ms2_mesh_to_df(ms2_1)
+        ms2_mesh_df = self._ms2_mesh_to_df(x_0)
         ms2_target_plot = ms2_mesh_df.plot(
             x="y",
             y="x",
@@ -670,7 +906,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_noise_mesh_df = self._ms2_mesh_to_df(ms2_2)
+        ms2_noise_mesh_df = self._ms2_mesh_to_df(x_noise)
         ms2_noise_plot = ms2_noise_mesh_df.plot(
             x="y",
             y="x",
@@ -687,7 +923,7 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms2_input_mesh_df = self._ms2_mesh_to_df(x_start_rand.cpu().detach().numpy().squeeze(0))
+        ms2_input_mesh_df = self._ms2_mesh_to_df(ms2_cond)
         ms2_input_plot = ms2_input_mesh_df.plot(
             x="y",
             y="x",
@@ -704,23 +940,40 @@ class ModelInterface(object):
             backend=backend,
         )
 
-        ms1_df = self._ms1_to_df(ms1_1.unsqueeze(0))
-        ms1_plot = ms1_df.plot(
-            kind="chromatogram",
-            x="y",
-            y="intensity",
-            title="Query MS1",
-            xlabel="RT Index",
-            ylabel="Intensity",
-            height=500,
-            width=800,
-            grid=False,
-            show_plot=False,
-            backend=backend,
-        )
+        if ms1_shape == "1d":
+            ms1_df = self._ms1_to_df(ms1_cond)
+            ms1_plot = ms1_df.plot(
+                kind="chromatogram",
+                x="y",
+                y="intensity",
+                title="Query MS1",
+                xlabel="RT Index",
+                ylabel="Intensity",
+                height=500,
+                width=800,
+                grid=False,
+                show_plot=False,
+                backend=backend,
+            )
+        elif ms1_shape == "2d":
+            ms1_df = self._ms2_mesh_to_df(ms1_cond)
+            ms1_plot = ms1_df.plot(
+                x="y",
+                y="x",
+                z="intensity",
+                title="Query MS1",
+                kind="peakmap",
+                xlabel="RT Index",
+                ylabel="m/z Index",
+                height=500,
+                width=800,
+                plot_3d=plot_3d,
+                grid=False,
+                show_plot=False,
+                backend=backend,
+            )
 
         return ms2_target_plot, ms1_plot, ms2_noise_plot, ms2_input_plot, pred_noise_plot, pred_plot
-
     ###################
     # Private Methods #
     ###################
@@ -733,15 +986,39 @@ class ModelInterface(object):
         self.loss_func = torch.nn.L1Loss()
 
     def _prepare_training(self, lr: float, **kwargs):
+        """
+        Prepare the model for training by setting the learning rate.
+
+        Parameters
+        ----------
+        lr : float
+            The learning rate.
+        kwargs : dict
+            Additional arguments for the training process.
+        """
         self.model.train()
         self._set_lr(lr)
 
     def _set_optimizer(self, lr):
-        """Set optimizer"""
+        """
+        Set the optimizer for the model.
+
+        Parameters
+        ----------
+        lr : float
+            The learning rate.
+        """
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr)
 
     def _set_lr(self, lr: float):
-        """Set learning rate"""
+        """
+        Set the learning rate for the optimizer.
+
+        Parameters
+        ----------
+        lr : float
+            The learning rate.
+        """
         if self.optimizer is None:
             self._set_optimizer(lr)
         else:
@@ -752,12 +1029,17 @@ class ModelInterface(object):
         """
         Returns a learning rate scheduler with warmup.
 
-        Args:
-            warmup_epoch (int): The number of warmup epochs.
-            epoch (int): The total number of training epochs.
+        Parameters
+        ----------
+        warmup_epoch : int
+            The number of warmup epochs.
+        epoch : int
+            The total number of training epochs.
 
-        Returns:
-            torch.optim.lr_scheduler: The learning rate scheduler with warmup.
+        Returns
+        -------
+        torch.optim.lr_scheduler._LRScheduler
+            The learning rate scheduler with warmup.
         """
         if warmup_epoch > epoch:
             warmup_epoch = epoch // 2
@@ -765,14 +1047,39 @@ class ModelInterface(object):
             self.optimizer, num_warmup_steps=warmup_epoch, num_training_steps=epoch
         )
 
-    def _train_one_epoch(self, epoch, dataloader):
-        """Train one epoch"""
+    def _train_one_epoch(self, epoch, dataloader, mixture_weights=(0.5, 0.5)):
+        """
+        Train the model for one epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            The current epoch number.
+        dataloader : torch.utils.data.DataLoader
+            The dataloader for training.
+        mixture_weights : tuple, optional
+            The weights for the mixture of the two samples, defaults to (0.5, 0.5).
+
+        Returns
+        -------
+        list
+            The list of batch losses for the epoch.
+        """
         self.model.train()
         batch_loss = []
         for batch_idx, (ms2_1, ms1_1, ms2_2, ms1_2) in enumerate(dataloader):
-            x_start, x_cond = ms2_1.to(self.device), ms1_1.to(self.device)
-            x_noise = ms2_2.to(self.device)
-            loss = self._train_one_batch(x_start, x_cond, x_noise, self.ms1_loss_weight)
+            x_0, ms1_cond = ms2_1.to(self.device), ms1_1.to(self.device)
+            # Simulated mixed spectra from target sample and other sample
+            ms2_cond = (ms2_1 * mixture_weights[0]).to(self.device) + (
+                ms2_2 * mixture_weights[1]
+            ).to(self.device)
+            loss = self._train_one_batch(
+                x_0,
+                ms2_cond=ms2_cond,
+                ms1_cond=ms1_cond,
+                noise=None,
+                ms1_loss_weight=self.ms1_loss_weight,
+            )
             batch_loss.append(loss)
 
             if self.use_wandb:
@@ -780,25 +1087,83 @@ class ModelInterface(object):
 
         return batch_loss
 
-    def _train_one_batch(self, x_start, x_cond, x_noise, ms1_loss_weight):
-        """Train one batch"""
+    def _train_one_batch(self, x_0, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
+        """
+        Train the model for one batch.
+
+        Parameters
+        ----------
+        x_0 : torch.Tensor
+            The input tensor.
+        ms2_cond : torch.Tensor, optional
+            The MS2 condition tensor, defaults to None.
+        ms1_cond : torch.Tensor, optional
+            The MS1 condition tensor, defaults to None.
+        noise : torch.Tensor, optional
+            The noise tensor, defaults to None.
+        ms1_loss_weight : float, optional
+            The weight for the MS1 loss, defaults to 0.0.
+
+        Returns
+        -------
+        float
+            The loss value for the batch.
+        """
         self.optimizer.zero_grad()
-        loss = self.train_step(x_start, x_cond, noise=x_noise, ms1_loss_weight=ms1_loss_weight)
+        loss = self.train_step(
+            x_0,
+            ms2_cond=ms2_cond,
+            ms1_cond=ms1_cond,
+            noise=noise,
+            ms1_loss_weight=ms1_loss_weight,
+        )
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
         self.optimizer.step()
         return loss.item()
 
-    def _predict_one_batch(self, x_start, x_cond, num_steps=1000):
-        """Predict one batch"""
+    def _predict_one_batch(self, x_0, ms2_cond=None, ms1_cond=None, num_steps=1000):
+        """
+        Predict the output for one batch.
+
+        Parameters
+        ----------
+        x_0 : torch.Tensor
+            The input tensor.
+        ms2_cond : torch.Tensor, optional
+            The MS2 condition tensor, defaults to None.
+        ms1_cond : torch.Tensor, optional
+            The MS1 condition tensor, defaults to None.
+        num_steps : int, optional
+            The number of steps for prediction, defaults to 1000.
+
+        Returns
+        -------
+        tuple
+            The predicted sample and predicted noise.
+        """
         self.model.eval()
         with torch.no_grad():
-            sample, pred_noise = self.sample(x_start, x_cond, num_steps=num_steps)
+            sample, pred_noise = self.sample(
+                torch.randn_like(x_0), ms2_cond=ms2_cond, ms1_cond=ms1_cond, num_steps=num_steps
+            )
         return sample[0].cpu().detach().numpy(), pred_noise[0].cpu().detach().numpy()
 
     @staticmethod
     def _ms2_mesh_to_df(arr):
-        """Convert MS2 mesh to DataFrame for 2D plotting"""
+        """
+        Convert MS2 mesh to DataFrame for 2D plotting.
+
+        Parameters
+        ----------
+        arr : np.ndarray
+            The MS2 mesh array.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame for 2D plotting.
+        """
         rows, cols = arr.shape
         y, x = np.meshgrid(range(rows), range(cols), indexing="ij")
         x_flat = x.flatten()
@@ -809,11 +1174,23 @@ class ModelInterface(object):
 
     @staticmethod
     def _ms2_to_df(batch_ms2):
-        """Convert MS2 batch to DataFrame for 1D plotting"""
+        """
+        Convert MS2 batch to DataFrame for 1D plotting.
+
+        Parameters
+        ----------
+        batch_ms2 : np.ndarray
+            The MS2 batch array.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame for 1D plotting.
+        """
         ms2_df = pd.DataFrame()
         for i in range(batch_ms2.shape[0]):
             sample = batch_ms2[i]
-            df = pd.DataFrame(sample.numpy())
+            df = pd.DataFrame(sample)
             df["sample_id"] = i
             df = df.melt(id_vars=["sample_id"], var_name="x", value_name="intensity")
             df["y"] = df.index % 34
@@ -822,11 +1199,23 @@ class ModelInterface(object):
 
     @staticmethod
     def _ms1_to_df(batch_ms1):
-        """Convert MS1 batch to DataFrame for 1D plotting"""
+        """
+        Convert MS1 batch to DataFrame for 1D plotting.
+
+        Parameters
+        ----------
+        batch_ms1 : np.ndarray
+            The MS1 batch array.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame for 1D plotting.
+        """
         ms1_df = pd.DataFrame()
         for i in range(batch_ms1.shape[0]):
             sample = batch_ms1[i]
-            df = pd.DataFrame(sample.numpy().reshape(1, -1))
+            df = pd.DataFrame(sample.reshape(1, -1))
             df["sample_id"] = i
             df = df.melt(id_vars=["sample_id"], var_name="y", value_name="intensity")
             ms1_df = pd.concat([ms1_df, df], ignore_index=True)
@@ -834,7 +1223,19 @@ class ModelInterface(object):
 
     @staticmethod
     def _convert_mpl_fig_to_bytes(fig):
-        """Convert a matplotlib figure to bytes"""
+        """
+        Convert a matplotlib figure to bytes.
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure
+            The matplotlib figure.
+
+        Returns
+        -------
+        BytesIO
+            The bytes representation of the figure.
+        """
         buf = BytesIO()
         fig.savefig(buf, format="png")
         buf.seek(0)

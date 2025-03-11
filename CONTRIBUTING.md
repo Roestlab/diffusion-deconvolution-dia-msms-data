@@ -9,7 +9,7 @@ Thank you for your interest in contributing to `diffusion-deconvolution-dia-msms
 2. **Clone your fork**: Clone your forked repository to your local development environment.
 
     ```bash
-    git clone https://github.com/hackbio-ca/diffusion-deconvolution-dia-msms.git
+    git clone https://github.com/Roestlab/diffusion-deconvolution-dia-msms-data.git
     ```
 
 3. **Create a new branch**: Create a new branch for your changes. Use a descriptive branch name that indicates the work you are doing.
@@ -44,7 +44,7 @@ Please follow these guidelines to ensure consistency across the codebase:
 
 ## Reporting Issues
 
-If you encounter a bug, have a question, or want to suggest a new feature, please [open an issue](https://github.com/hackbio-ca/diffusion-deconvolution-dia-msms/issues) on GitHub. Provide as much detail as possible, including:
+If you encounter a bug, have a question, or want to suggest a new feature, please [open an issue](https://github.com/Roestlab/diffusion-deconvolution-dia-msms/issues) on GitHub. Provide as much detail as possible, including:
 
 - Steps to reproduce the issue.
 - The expected behavior and the observed behavior.
