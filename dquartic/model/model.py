@@ -241,7 +241,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         return sqrt_alpha_bar_t * x_0 + sqrt_one_minus_alpha_bar_t * noise
 
-    def p_sample(self, x_t, t, init_cond=None, attn_cond=None):
+    def p_sample(self, x_t, t, init_cond=None, attn_cond=None, precursor_cond=None):
         """
         Performs a reverse sampling step, estimating the original input x_0 or the noise epsilon.
 
@@ -253,6 +253,7 @@ class DDIMDiffusionModel(ModelInterface):
             t (torch.Tensor): The current timestep index.
             init_cond (torch.Tensor, optional): Initial conditions to use for prediction.
             attn_cond (torch.Tensor, optional): Attention conditions to use for semantic guidance.
+            precursor_cond (torch.Tensor, optional): Precursor feature masks used as additional conditioning signals.
 
         Returns:
             torch.Tensor: The estimated previous state x_{t-1}.
@@ -268,12 +269,12 @@ class DDIMDiffusionModel(ModelInterface):
 
         if self.pred_type == "eps":
             # Predict noise
-            eps_pred = self.model(x_t, t_tensor, init_cond, attn_cond)
+            eps_pred = self.model(x_t, t_tensor, init_cond, attn_cond, precursor_cond)
             # Compute x_0 prediction
             x0_pred = (x_t - sqrt_one_minus_alpha_bar_t * eps_pred) / sqrt_alpha_bar_t
         elif self.pred_type == "x0":
             # Predict x_0 directly
-            x0_pred = self.model(x_t, t_tensor, init_cond, attn_cond)
+            x0_pred = self.model(x_t, t_tensor, init_cond, attn_cond, precursor_cond)
             # Compute eps_pred from x0_pred
             eps_pred = (x_t - sqrt_alpha_bar_t * x0_pred) / sqrt_one_minus_alpha_bar_t
         else:
@@ -290,9 +291,10 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t_prev, eps_pred
 
-    def sample(self, x_t, ms2_cond=None, ms1_cond=None, num_steps=1000):
+    def sample(self, x_t, ms2_cond=None, ms1_cond=None, precursor_cond=None, num_steps=1000):
         """
-        Generates samples from the model starting from a noisy input x_t, optionally conditioned on MS2 and MS1 data.
+        Generates samples from the model starting from a noisy input x_t, optionally conditioned on MS2, MS1,
+        and precursor feature masks.
 
         This function iteratively applies the reverse diffusion process (`p_sample`) to generate samples moving
         from noisy data back towards the original data distribution.
@@ -301,6 +303,7 @@ class DDIMDiffusionModel(ModelInterface):
             x_t (torch.Tensor): The initial noisy input tensor.
             ms2_cond (torch.Tensor, optional): MS2 mixture data maps for conditioning.
             ms1_cond (torch.Tensor, optional): Clean MS1 data maps for conditioning.
+            precursor_cond (torch.Tensor, optional): Precursor feature masks used as additional conditioning signals.
             num_steps (int): The number of reverse sampling steps to perform.
 
         Returns:
@@ -309,6 +312,7 @@ class DDIMDiffusionModel(ModelInterface):
         """
         ms2_cond = self.normalize(ms2_cond) if ms2_cond is not None else None
         ms1_cond = self.normalize(ms1_cond) if ms1_cond is not None else None
+        precursor_cond = self.normalize(precursor_cond) if precursor_cond is not None else None
         pred_noise = None
         time_steps = torch.linspace(self.num_timesteps - 1, 0, num_steps, dtype=torch.long)
 
@@ -323,7 +327,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         return x_t, pred_noise
 
-    def train_step(self, x_0, ms2_cond=None, ms1_cond=None, noise=None, ms1_loss_weight=0.0):
+    def train_step(self, x_0, ms2_cond=None, ms1_cond=None, precursor_cond=None, noise=None, ms1_loss_weight=0.0):
         """
         Performs a single training step using the specified input data, optionally with additional MS1 loss weighting.
 
@@ -334,6 +338,7 @@ class DDIMDiffusionModel(ModelInterface):
             x_0 (torch.Tensor): The clean MS2 data maps (original data).
             ms2_cond (torch.Tensor, optional): MS2 mixture data maps for additional conditioning.
             ms1_cond (torch.Tensor, optional): Clean MS1 data maps for additional conditioning.
+            precursor_cond (torch.Tensor, optional): Precursor feature masks used as additional conditioning signals.
             noise (torch.Tensor, optional): Noise tensor to use during forward diffusion. If None, noise is sampled randomly.
             ms1_loss_weight (float): Weighting factor for an additional MS1-specific loss component.
 
@@ -356,7 +361,7 @@ class DDIMDiffusionModel(ModelInterface):
 
         if self.pred_type == "eps":
             # Predict noise
-            eps_pred = self.model(x_t, t, ms2_cond, ms1_cond)
+            eps_pred = self.model(x_t, t, ms2_cond, ms1_cond, precursor_cond)
             # Compute primary loss between predicted noise and true noise
             primary_loss = F.mse_loss(eps_pred, noise)
 
@@ -371,7 +376,7 @@ class DDIMDiffusionModel(ModelInterface):
                     )
         elif self.pred_type == "x0":
             # Predict x0
-            x0_pred = self.model(x_t, t, ms2_cond, ms1_cond)
+            x0_pred = self.model(x_t, t, ms2_cond, ms1_cond, precursor_cond)
             # Compute primary loss between predicted x0 and true x0
             primary_loss = F.mse_loss(x0_pred, x_0)
 
