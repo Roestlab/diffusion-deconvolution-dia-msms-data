@@ -24,6 +24,9 @@ def load_train_config(config_path: str, **kwargs):
     
     if "ms1_data_path" not in config_params["data"]:
         config_params["data"]["ms1_data_path"] = None
+    
+    if "feature_mask_path" not in config_params["data"]:
+        config_params["data"]["feature_mask_path"] = None
 
     # Override the config params with the keyword arguments
     if "parquet_directory" in kwargs:
@@ -37,6 +40,10 @@ def load_train_config(config_path: str, **kwargs):
     if "ms1_data_path" in kwargs:
         if kwargs["ms1_data_path"] is not None:
             config_params["data"]["ms1_data_path"] = kwargs["ms1_data_path"]
+            
+    if "feature_mask_path" in kwargs:
+        if kwargs["feature_mask_path"] is not None:
+            config_params["data"]["feature_mask_path"] = kwargs["feature_mask_path"]
 
     if "batch_size" in kwargs:
         if kwargs["batch_size"] is not None:
@@ -69,6 +76,7 @@ def generate_train_config(config_path: str):
             "parquet_directory": "data/",
             "ms2_data_path": None,
             "ms1_data_path": None,
+            "feature_mask_path": None,  # Add feature mask path
             "normalize": "minmax",
         },
         "model": {

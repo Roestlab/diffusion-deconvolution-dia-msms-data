@@ -77,12 +77,13 @@ def train(
     parquet_directory = config['data']['parquet_directory']
     ms2_data_path = config['data']['ms2_data_path']
     ms1_data_path = config['data']['ms1_data_path']
+    feature_mask_file=config["data"]["feature_mask_path"],
     batch_size = config['model']['batch_size']
     checkpoint_path = config['model']['checkpoint_path']
     use_wandb = config['wandb']['use_wandb']
     threads = config['threads']
 
-    dataset = DIAMSDataset(parquet_directory, ms2_data_path, ms1_data_path, normalize=config['data']['normalize'])
+    dataset = DIAMSDataset(parquet_directory, ms2_data_path, ms1_data_path, feature_mask_file, normalize=config['data']['normalize'])
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=threads)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
