@@ -1,8 +1,9 @@
 {
     "data":{
         "parquet_directory": "data/",
-        "ms2_data_path": null,
-        "ms1_data_path": null,
+        "ms2_data_path": "data/gen_spec_lib.parquet",
+        "ms1_data_path": "data/report.parquet",
+        "raw_files": "path/to/raw_file.mzML",
         "normalize": "minmax"
     },
     "model":{
