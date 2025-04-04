@@ -30,12 +30,20 @@ class DIAMSDataset(Dataset):
         __getitem__(idx): Retrieves an item from the dataset.
     """
 
-    def __init__(self, parquet_directory=None, ms2_file=None, ms1_file=None, normalize: Literal[None, "minmax"] = None):
+    def __init__(self, parquet_directory=None, ms2_file=None, ms1_file=None, feature_mask_file=None, normalize: Literal[None, "minmax"] = None):
         if parquet_directory is None and ms1_file is not None and ms2_file is not None:
             self.ms2_data = np.load(ms2_file, mmap_mode="r")
-            self.ms1_data = np.load(ms1_file, mmap_mode="r")
-            self.data_type = "npy"
-            print(f"Info: Loaded  {len(self.ms2_data)} MS2 slice samples and {len(self.ms1_data)} MS1 slice samples from NPY files.")
+            # Use feature mask instead of MS1 if provided
+            if feature_mask_file is not None:
+                self.ms1_data = np.load(feature_mask_file, mmap_mode="r")
+                print(f"Info: Using feature masks instead of MS1 data")
+                self.data_type = "npy"
+                print(f"Info: Loaded {len(self.ms2_data)} MS2 samples and {len(self.ms1_data)} conditioning samples")
+            else:
+                self.ms1_data = np.load(ms1_file, mmap_mode="r")
+                self.data_type = "npy"
+                print(f"Info: Loaded  {len(self.ms2_data)} MS2 slice samples and {len(self.ms1_data)} MS1 slice samples from NPY files.")
+            
         elif parquet_directory is not None and ms1_file is None and ms2_file is None:
             self.meta_df = self.read_parquet_meta(parquet_directory)
             self.parquet_directory = parquet_directory  
